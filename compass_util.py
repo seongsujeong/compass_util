@@ -17,7 +17,7 @@ import multiprocessing
 
 def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
                 to_amplitude = False, to_mem=False):
-    '''Convert SLC into single-band ampliture image '''
+    '''Convert SLC into single-band amplitude image '''
 
     # TODO: Implement to apply multilook
     with h5py.File(path_slc_in, 'r') as hin:
@@ -28,6 +28,7 @@ def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
                                  attrs['spatial_ref'].decode())
 
     option_gtiff = ['COMPRESS=LZW', 'BIGTIFF=YES']
+    option_mem = []
 
     ncols = arr_slc.shape[1]
     nrows = arr_slc.shape[0]
@@ -40,17 +41,19 @@ def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
 
     if to_mem:
         drv_out = gdal.GetDriverByName('MEM')
+        option_raster = option_mem
     else:
         drv_out = gdal.GetDriverByName('GTiff')
+        option_raster = option_gtiff
 
 
     if to_amplitude:
         raster_out = drv_out.Create(path_amp_out, ncols, nrows,
-                                1, gdal.GDT_Float32, option_gtiff)
+                                1, gdal.GDT_Float32, option_raster)
         raster_out.WriteArray(np.abs(arr_slc))
     else:
         raster_out = drv_out.Create(path_amp_out, ncols, nrows,
-                                1, gdal.GDT_CFloat32, option_gtiff)
+                                1, gdal.GDT_CFloat32, option_raster)
         raster_out.WriteArray(arr_slc)
 
     raster_out.SetGeoTransform((x_start, spacing_x, 0,
