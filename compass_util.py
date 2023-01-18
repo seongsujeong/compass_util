@@ -128,7 +128,7 @@ def is_hdf5(path_data):
         return False
 
 
-def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, window_size = 128):
+def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, window_size = 32):
     '''
     Extract the corner reflectors' coordinates
 
