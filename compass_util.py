@@ -11,6 +11,8 @@ import os
 from pyproj import CRS, Transformer
 import csv
 import matplotlib.pyplot as plt
+import multiprocessing
+
 
 
 def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
@@ -65,20 +67,34 @@ def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
         return None
 
 
-def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str):
+def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, ncpu=4):
     '''
     Search the list of SLC files. Convert them into amplitude images
     '''
 
-    # TODO: Parallelize the processing
-
     list_slc_in = glob.glob(f'{topdir_slc_in}/**/*.h5', recursive=True)
     num_slc_in = len(list_slc_in)
+
+    list_flag_amp = [True] * num_slc_in
+
+    # pre-define the output tiff file names for parallel processing
+    list_amp_out = [None] * num_slc_in
     for i_slc, slc_in in enumerate(list_slc_in):
-        print(f'Processing: {i_slc+1} of {num_slc_in}')
         filename_out = os.path.basename(slc_in).replace('.h5','.tif')
         path_amp = f'{dir_amp_out}/{filename_out}'
-        extract_slc(slc_in, path_amp, to_amplitude=True)
+        list_amp_out[i_slc] = path_amp
+
+    with multiprocessing.Pool(ncpu) as p:
+        p.starmap(extract_slc,
+                  zip(list_slc_in,
+                      list_amp_out,
+                      list_flag_amp))
+
+    #for i_slc, slc_in in enumerate(list_slc_in):
+    #    print(f'Processing: {i_slc+1} of {num_slc_in}')
+    #    filename_out = os.path.basename(slc_in).replace('.h5','.tif')
+    #    path_amp = f'{dir_amp_out}/{filename_out}'
+    #    extract_slc(slc_in, path_amp, to_amplitude=True)
 
 
 
@@ -89,13 +105,11 @@ def form_interferogram(path_slc_ref:str, path_slc_sec:str, path_ifg_out:str):
     pass
 
 
-
 def mosaic_raster(list_raster_in: str, path_raster_mosaic: str):
     '''
     Mosaic the input rasters
     '''
     pass
-
 
 
 def load_cr_coord_csv(path_cr_csv):
