@@ -10,7 +10,7 @@ import glob
 import os
 from pyproj import CRS, Transformer
 import csv
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import multiprocessing
 
 
