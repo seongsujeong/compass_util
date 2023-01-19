@@ -223,7 +223,7 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
     '''
     Docstring here
     '''
-    list_slc = glob.glob(f'{dir_stack}/*.h5', recursive=True)
+    list_slc = glob.glob(f'{dir_stack}/**/*.h5', recursive=True)
 
     num_slc = len(list_slc)
     print(f'{num_slc} SLCs are found')
