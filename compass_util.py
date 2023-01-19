@@ -12,6 +12,7 @@ from pyproj import CRS, Transformer
 import csv
 #import matplotlib.pyplot as plt
 import multiprocessing
+import json
 
 
 
@@ -104,6 +105,7 @@ def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, ncpu=4):
 def form_interferogram(path_slc_ref:str, path_slc_sec:str, path_ifg_out:str):
     '''
     Form interferogram using ISCE3
+    placeholder
     '''
     pass
 
@@ -111,6 +113,7 @@ def form_interferogram(path_slc_ref:str, path_slc_sec:str, path_ifg_out:str):
 def mosaic_raster(list_raster_in: str, path_raster_mosaic: str):
     '''
     Mosaic the input rasters
+    placeholder
     '''
     pass
 
@@ -212,10 +215,31 @@ def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, wi
     mapx_peak = geotransform_slc[0] + imgxy_peak[1]*geotransform_slc[1]
     mapy_peak = geotransform_slc[3] + imgxy_peak[0]*geotransform_slc[5]
 
+    return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1])
 
 
-    return (mapx_peak, mapy_peak)
+def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
+                               ovs_factor=128, window_size=32):
+    '''
+    Docstring here
+    '''
+    list_slc = glob.glob(f'{dir_stack}/*.h5', recursive=True)
 
+    num_slc = len(list_slc)
+    print(f'{num_slc} SLCs are found')
+
+    dict_out = {}
+    dict_out['gslc_name']=[]
+    dict_out['coord_cr_slc']=[]
+
+    for i_slc, path_slc in enumerate(list_slc):
+        coords = extract_slc_coord_cr(path_slc, latlon_cr, is_gslc, ovs_factor, window_size)
+        if i_slc ==0:
+            dict_out['xy_cr'] = coords[2:]
+        dict_out['gslc_name'].append(os.path.basename(path_slc))
+        dict_out['coord_cr_slc'].append(coords[0:2])
+
+    return dict_out
 
 
 if __name__=='__main__':
