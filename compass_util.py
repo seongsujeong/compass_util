@@ -233,6 +233,7 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
     dict_out['coord_cr_slc']=[]
 
     for i_slc, path_slc in enumerate(list_slc):
+        print(f'{i_slc + 1} / {num_slc} - {os.path.basename(path_slc)}')
         coords = extract_slc_coord_cr(path_slc, latlon_cr, is_gslc, ovs_factor, window_size)
         if i_slc ==0:
             dict_out['xy_cr'] = coords[2:]
