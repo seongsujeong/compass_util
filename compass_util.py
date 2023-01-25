@@ -10,7 +10,7 @@ import glob
 import os
 from pyproj import CRS, Transformer
 import csv
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import multiprocessing
 import json
 
@@ -243,25 +243,23 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
     return dict_out
 
 
-if __name__=='__main__':
-    # put test codes here
-    '''path_slc = ('/Users/jeong/Documents/'
-                'OPERA_SCRATCH/CSLC/CSLC_BETA_DELIVERY/'
-                'CSLC_outputs_from_different_envs/'
-                'output_s1_cslc.aurora.2022_1221/'
-                't064_135518_iw1/20220501/t064_135518_iw1_20220501_VV.h5')
+def visualize_cr_dict(list_path_json, list_marker, list_legend=None):
+    '''
+    Visualize the CR detection results from `extract_slc_coord_stack`
+    '''
+    for i_json, path_json in enumerate(list_path_json):
+        with open(path_json, encoding='utf8') as fin:
+            dict_cr = json.load(fin)
+        arr_coord_slc = np.array(dict_cr['coord_cr_slc'])
+        coord_cr_ref = np.array(dict_cr['xy_cr'])
+        plt.plot(arr_coord_slc[:,0] - coord_cr_ref[0],
+                 arr_coord_slc[:,1] - coord_cr_ref[1],
+                 list_marker[i_json])
+    plt.plot(0,0,'ko')
+    plt.grid(True)
+    if not list_legend is None:
+        plt.legend(list_legend)
 
-    path_amp = ('/Users/jeong/Desktop/amp.slc')
-    
-    slc_to_amplitude(path_slc, path_amp)'''
+    plt.show()
 
-    # Test code #1 : batch conversion of GSLC to amplitude GEOTIFF
-    #path_in = '/u/aurora-r0/jeong/scratch/CSLC/stack_processing_Rosamond/output_s1_cslc_no_correction'
-    #path_out = '/u/aurora-r0/jeong/scratch/CSLC/stack_processing_Rosamond/amplitude_backsctter_no_correction'
-    #slc_to_amplitude_batch(path_in, path_out)
-
-    # Test code #2: extract the CR coordinates from GSLC
-    PATH_GSLC_H5 = ('/Users/jeong/Documents/OPERA_SCRATCH/CSLC/STACK_PROCESSING/output_s1_cslc_no_correction/t064_135523_iw2/20220922/t064_135523_iw2_20220922_VV.h5')
-
-    extract_slc_coord_cr(PATH_GSLC_H5, [34.8054937, -118.0708031], True, 32)
 
