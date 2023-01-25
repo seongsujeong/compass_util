@@ -148,14 +148,22 @@ def is_hdf5(path_data):
         return False
 
 
-def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, window_size = 32):
+def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, window_size = 32, save_fig=False):
     '''
     Extract the corner reflectors' coordinates
 
-    path_slc: Path to the input SLC to find CR
-    latlon_cr: Latitute and longitude of CR
-    is_gslc: True if the input SLC is geocoded; False otherwise
-    ovs_factor: Oversampling factor
+    path_slc: str
+        Path to the input SLC to find CR
+    latlon_cr: list
+        Latitute and longitude of CR
+    is_gslc: bool
+        True if the input SLC is geocoded; False otherwise
+    ovs_factor: int
+        Oversampling factor
+    window_size: int
+        Size of the image chip
+    save_fig: bool
+        True when want to save the plot of the detection result; False otherwise
 
     '''
 
@@ -243,10 +251,16 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
     return dict_out
 
 
-def visualize_cr_dict(list_path_json, list_marker, list_legend=None):
+def visualize_cr_dict(list_path_json, list_marker, list_legend=None, figure_size=None, figure_dpi=None, alpha_marker=1.0):
     '''
     Visualize the CR detection results from `extract_slc_coord_stack`
     '''
+    if figure_size:
+        plt.rcParams['figure.figsize'] = figure_size
+
+    if figure_dpi:
+        plt.rcParams['figure.dpi'] = figure_dpi
+
     for i_json, path_json in enumerate(list_path_json):
         with open(path_json, encoding='utf8') as fin:
             dict_cr = json.load(fin)
@@ -254,12 +268,16 @@ def visualize_cr_dict(list_path_json, list_marker, list_legend=None):
         coord_cr_ref = np.array(dict_cr['xy_cr'])
         plt.plot(arr_coord_slc[:,0] - coord_cr_ref[0],
                  arr_coord_slc[:,1] - coord_cr_ref[1],
-                 list_marker[i_json])
+                 list_marker[i_json],
+                alpha=alpha_marker)
+
     plt.plot(0,0,'ko')
     plt.grid(True)
     if not list_legend is None:
         plt.legend(list_legend)
+    plt.text(0,0, 'Corner reflector from GPS')
+    plt.axis('equal')
+    plt.xlabel('diff_x (m)')
+    plt.ylabel('diff_y (m)')
 
     plt.show()
-
-
