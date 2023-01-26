@@ -18,7 +18,7 @@ import json
 
 def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
                 to_amplitude = False, to_mem=False):
-    '''Convert SLC into single-band amplitude image '''
+    '''Extract CSLC data from HDF5 file.'''
 
     # TODO: Implement to apply multilook
     with h5py.File(path_slc_in, 'r') as hin:
@@ -33,6 +33,7 @@ def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
 
     ncols = arr_slc.shape[1]
     nrows = arr_slc.shape[0]
+
     # Calculate geotransformation parameters
     x_start = x_coords[0]
     y_start = y_coords[0]
@@ -46,7 +47,6 @@ def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
     else:
         drv_out = gdal.GetDriverByName('GTiff')
         option_raster = option_gtiff
-
 
     if to_amplitude:
         raster_out = drv_out.Create(path_amp_out, ncols, nrows,
@@ -76,10 +76,19 @@ def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, ncpu=4):
     Search the list of SLC files. Convert them into amplitude images
     '''
 
+    if not os.path.exists(dir_amp_out):
+        os.makedirs(dir_amp_out, exist_ok=True)
+
     list_slc_in = glob.glob(f'{topdir_slc_in}/**/*.h5', recursive=True)
     num_slc_in = len(list_slc_in)
 
+    # adjust the number of workers if necessary
+    if num_slc_in < ncpu:
+        ncpu=num_slc_in
+
     list_flag_amp = [True] * num_slc_in
+    list_flag_mem = [False] * num_slc_in
+    list_pol = ['VV'] * num_slc_in
 
     # pre-define the output tiff file names for parallel processing
     list_amp_out = [None] * num_slc_in
@@ -92,14 +101,9 @@ def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, ncpu=4):
         p.starmap(extract_slc,
                   zip(list_slc_in,
                       list_amp_out,
-                      list_flag_amp))
-
-    #for i_slc, slc_in in enumerate(list_slc_in):
-    #    print(f'Processing: {i_slc+1} of {num_slc_in}')
-    #    filename_out = os.path.basename(slc_in).replace('.h5','.tif')
-    #    path_amp = f'{dir_amp_out}/{filename_out}'
-    #    extract_slc(slc_in, path_amp, to_amplitude=True)
-
+                      list_pol,
+                      list_flag_amp,
+                      list_flag_mem))
 
 
 def form_interferogram(path_slc_ref:str, path_slc_sec:str, path_ifg_out:str):
@@ -148,9 +152,9 @@ def is_hdf5(path_data):
         return False
 
 
-def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, window_size = 32, save_fig=False):
+def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, window_size = 32, save_fig=None):
     '''
-    Extract the corner reflectors' coordinates
+    Extract the corner reflectors' coordinates on SLC
 
     path_slc: str
         Path to the input SLC to find CR
@@ -162,8 +166,9 @@ def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, wi
         Oversampling factor
     window_size: int
         Size of the image chip
-    save_fig: bool
-        True when want to save the plot of the detection result; False otherwise
+    save_fig: str
+        filename to the plot of the CR detection result;
+        if None, the plot will not be saved.
 
     '''
 
@@ -208,20 +213,18 @@ def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, wi
 
     # Extract the image chip from source SLC
     slc_sub = arr_slc[upperleft_y:lowerright_y, upperleft_x:lowerright_x]
-    #plt.imshow(np.abs(slc_sub))
-    #plt.show()
 
-
-    #find the peak
+    # find the peak
     slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
-    idx_peak_ovs = np.argmax(slc_ov)
+    idx_peak_ovs = np.argmax(np.abs(slc_ov))
+    #idx_peak_ovs = np.argmax(slc_ov)
     imgxy_peak_ovs = np.unravel_index(idx_peak_ovs, slc_ov.shape)
 
-    imgxy_peak = (upperleft_y + imgxy_peak_ovs[0]/ovs_factor,
-                  upperleft_x + imgxy_peak_ovs[1]/ovs_factor)
+    imgxy_peak = (upperleft_x + imgxy_peak_ovs[1]/ovs_factor,
+                  upperleft_y + imgxy_peak_ovs[0]/ovs_factor)
 
-    mapx_peak = geotransform_slc[0] + imgxy_peak[1]*geotransform_slc[1]
-    mapy_peak = geotransform_slc[3] + imgxy_peak[0]*geotransform_slc[5]
+    mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
+    mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
 
     return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1])
 
@@ -281,3 +284,25 @@ def visualize_cr_dict(list_path_json, list_marker, list_legend=None, figure_size
     plt.ylabel('diff_y (m)')
 
     plt.show()
+
+
+## test code
+if __name__=='__main__':
+    path_slc_no_corr = '/Users/jeong/Documents/OPERA_SCRATCH/CSLC/LUT_CORRECTION_TEST_SITE/output_s1_cslc_no_correction/t064_135523_iw2/20221016/t064_135523_iw2_20221016_VV.h5'
+    path_slc_all_corr = '/Users/jeong/Documents/OPERA_SCRATCH/CSLC/LUT_CORRECTION_TEST_SITE/output_s1_cslc_all_correction/t064_135523_iw2/20221016/t064_135523_iw2_20221016_VV.h5'
+    latlon_cr = [34.80549368, -118.070803]
+    rt0 = extract_slc_coord_cr(path_slc_no_corr,
+                              latlon_cr,
+                              True,
+                              128, 32)
+    print(rt0[0] - rt0[2])
+    print(rt0[1] - rt0[3])
+    
+    rt1 = extract_slc_coord_cr(path_slc_all_corr,
+                              latlon_cr,
+                              True,
+                              128, 32)
+    print(rt1[0] - rt1[2])
+    print(rt1[1] - rt1[3])
+
+    print('asdfa')
