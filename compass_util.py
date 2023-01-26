@@ -13,7 +13,7 @@ import csv
 import matplotlib.pyplot as plt
 import multiprocessing
 import json
-
+from itertools import repeat
 
 
 def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
@@ -231,7 +231,7 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
         print(f'peak={[mapx_peak, mapy_peak]}, '
               f'error={[mapx_peak - xy_cr[0], mapy_peak - xy_cr[1]]}')
 
-    return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1])
+    return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1], os.path.basename(path_slc))
 
 
 def extract_slc_coord_cr_stack(dir_stack, latlon_cr,
@@ -257,12 +257,53 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr,
               f'dx={(coords[0] - coords[2]):06f}, dy={(coords[1] - coords[3]):06f}')
 
         if i_slc ==0:
-            dict_out['xy_cr'] = coords[2:]
+            dict_out['xy_cr'] = coords[2:4]
         dict_out['gslc_name'].append(os.path.basename(path_slc))
         dict_out['coord_cr_slc'].append(coords[0:2])
         
 
     return dict_out
+
+
+
+def extract_slc_coord_cr_stack_parallel(dir_stack, latlon_cr,
+                               ovs_factor=128, window_size=32, is_geocoded=True, ncpu=4):
+    '''
+    Docstring here
+    '''
+    list_slc = glob.glob(f'{dir_stack}/**/*.h5', recursive=True)
+    list_slc.sort()
+
+    num_slc = len(list_slc)
+    print(f'{num_slc} SLCs are found')
+
+    with multiprocessing.Pool(ncpu) as p:
+        list_coords = p.starmap(extract_slc_coord_cr,
+                             zip(list_slc,
+                                 repeat(latlon_cr, num_slc),
+                                 repeat(ovs_factor, num_slc),
+                                 repeat(window_size, num_slc),
+                                 repeat(is_geocoded, num_slc),
+                                 repeat(False, num_slc),
+                                 repeat(True, num_slc)))
+
+    # sort `rtn_coords` w.r.t. the CSLC file name
+    # (i.e. last entry in each elements in `rtn_coords`)
+    list_coords.sort(key=lambda x: x[-1])
+
+    # Convert the return value into dict
+    dict_out = {}
+    dict_out['gslc_name']=[]
+    dict_out['coord_cr_slc']=[]
+
+    dict_out['xy_cr'] = list_coords[0][2:4]
+
+    for coords in enumerate(list_coords):
+        dict_out['gslc_name'].append(coords[-1])
+        dict_out['coord_cr_slc'].append(coords[0:2])
+
+    return dict_out
+
 
 
 def visualize_cr_dict(list_path_json, list_marker, list_legend=None, figure_size=None, figure_dpi=None, alpha_marker=1.0):
