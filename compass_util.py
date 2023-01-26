@@ -152,7 +152,9 @@ def is_hdf5(path_data):
         return False
 
 
-def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, window_size = 32, save_fig=None):
+def extract_slc_coord_cr(path_slc, latlon_cr,
+                         ovs_factor = 128, window_size = 32,
+                         is_geocoded=True, save_fig=None, verbose=False):
     '''
     Extract the corner reflectors' coordinates on SLC
 
@@ -180,7 +182,7 @@ def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, wi
 
     arr_slc = raster_in.ReadAsArray()
     proj_slc = raster_in.GetProjection()
-    if is_gslc:
+    if is_geocoded:
         geotransform_slc = raster_in.GetGeoTransform()
     else:
         geotransform_slc = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
@@ -217,24 +219,28 @@ def extract_slc_coord_cr(path_slc, latlon_cr, is_gslc=True, ovs_factor = 128, wi
     # find the peak
     slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
     idx_peak_ovs = np.argmax(np.abs(slc_ov))
-    #idx_peak_ovs = np.argmax(slc_ov)
-    imgxy_peak_ovs = np.unravel_index(idx_peak_ovs, slc_ov.shape)
+    img_peak_ovs = np.unravel_index(idx_peak_ovs, slc_ov.shape)
 
-    imgxy_peak = (upperleft_x + imgxy_peak_ovs[1]/ovs_factor,
-                  upperleft_y + imgxy_peak_ovs[0]/ovs_factor)
+    imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
+                  upperleft_y + img_peak_ovs[0]/ovs_factor)
 
     mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
     mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
 
+    if verbose:
+        print(f'peak={[mapx_peak, mapy_peak]}, '
+              f'error={[mapx_peak - xy_cr[0], mapy_peak - xy_cr[1]]}')
+
     return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1])
 
 
-def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
-                               ovs_factor=128, window_size=32):
+def extract_slc_coord_cr_stack(dir_stack, latlon_cr,
+                               ovs_factor=128, window_size=32, is_geocoded=True):
     '''
     Docstring here
     '''
     list_slc = glob.glob(f'{dir_stack}/**/*.h5', recursive=True)
+    list_slc.sort()
 
     num_slc = len(list_slc)
     print(f'{num_slc} SLCs are found')
@@ -245,7 +251,8 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
 
     for i_slc, path_slc in enumerate(list_slc):
         print(f'{i_slc + 1} / {num_slc} - {os.path.basename(path_slc)}', end=' ')
-        coords = extract_slc_coord_cr(path_slc, latlon_cr, is_gslc, ovs_factor, window_size)
+        coords = extract_slc_coord_cr(path_slc, latlon_cr, ovs_factor, window_size,
+                                      is_geocoded=is_geocoded)
         print(f'x={coords[0]:06f}, y={coords[1]:06f}, '
               f'dx={(coords[0] - coords[2]):06f}, dy={(coords[1] - coords[3]):06f}')
 
