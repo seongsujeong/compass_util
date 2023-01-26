@@ -266,8 +266,9 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr,
 
 
 
-def extract_slc_coord_cr_stack_parallel(dir_stack, latlon_cr,
-                               ovs_factor=128, window_size=32, is_geocoded=True, ncpu=4):
+def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
+                                        ovs_factor: int=128, window_size: int=32,
+                                        is_geocoded: bool=True, ncpu: int=6):
     '''
     Docstring here
     '''
@@ -298,7 +299,7 @@ def extract_slc_coord_cr_stack_parallel(dir_stack, latlon_cr,
 
     dict_out['xy_cr'] = list_coords[0][2:4]
 
-    for coords in enumerate(list_coords):
+    for coords in list_coords:
         dict_out['gslc_name'].append(coords[-1])
         dict_out['coord_cr_slc'].append(coords[0:2])
 
