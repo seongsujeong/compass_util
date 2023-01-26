@@ -244,12 +244,16 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr, is_gslc=True,
     dict_out['coord_cr_slc']=[]
 
     for i_slc, path_slc in enumerate(list_slc):
-        print(f'{i_slc + 1} / {num_slc} - {os.path.basename(path_slc)}')
+        print(f'{i_slc + 1} / {num_slc} - {os.path.basename(path_slc)}', end=' ')
         coords = extract_slc_coord_cr(path_slc, latlon_cr, is_gslc, ovs_factor, window_size)
+        print(f'x={coords[0]:06f}, y={coords[1]:06f}, '
+              f'dx={(coords[0] - coords[2]):06f}, dy={(coords[1] - coords[3]):06f}')
+
         if i_slc ==0:
             dict_out['xy_cr'] = coords[2:]
         dict_out['gslc_name'].append(os.path.basename(path_slc))
         dict_out['coord_cr_slc'].append(coords[0:2])
+        
 
     return dict_out
 
