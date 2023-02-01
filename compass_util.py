@@ -291,37 +291,6 @@ def signal_to_background_ratio(slc_in, amp_peak, thres_tail = 0.03, to_db=True):
 
 
 
-
-def extract_slc_coord_cr_stack(dir_stack, latlon_cr,
-                               ovs_factor=128, window_size=32, is_geocoded=True):
-    '''
-    Docstring here
-    '''
-    list_slc = glob.glob(f'{dir_stack}/**/*.h5', recursive=True)
-    list_slc.sort()
-
-    num_slc = len(list_slc)
-    print(f'{num_slc} SLCs are found')
-
-    dict_out = {}
-    dict_out['gslc_name']=[]
-    dict_out['coord_cr_slc']=[]
-
-    for i_slc, path_slc in enumerate(list_slc):
-        print(f'{i_slc + 1} / {num_slc} - {os.path.basename(path_slc)}', end=' ')
-        coords = extract_slc_coord_cr(path_slc, latlon_cr, ovs_factor, window_size,
-                                      is_geocoded=is_geocoded)
-        print(f'x={coords[0]:06f}, y={coords[1]:06f}, '
-              f'dx={(coords[0] - coords[2]):06f}, dy={(coords[1] - coords[3]):06f}')
-
-        if i_slc ==0:
-            dict_out['xy_cr'] = coords[2:4]
-        dict_out['gslc_name'].append(os.path.basename(path_slc))
-        dict_out['coord_cr_slc'].append(coords[0:2])
-
-
-    return dict_out
-
 def get_dem_error(latlonhgt_cr_deg, path_dem):
     '''
     Calculate the height error of input CR whose coordinate is llh
