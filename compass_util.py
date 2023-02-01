@@ -308,6 +308,8 @@ def signal_to_background_ratio(slc_in, amp_peak, thres_tail = 0.03, to_db=True):
 
     # Identify the lat/lon/hgt from the loaded csv
 
+    # Placeholder for now...
+
 
 
 
