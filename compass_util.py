@@ -154,7 +154,7 @@ def is_hdf5(path_data):
 
 def extract_slc_coord_cr(path_slc, latlon_cr,
                          ovs_factor = 128, window_size = 32,
-                         is_geocoded=True, path_fig=None, verbose=False):
+                         path_fig=None, verbose=False):
     '''
     Extract the corner reflectors' coordinates on SLC
 
@@ -182,10 +182,8 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
     # TODO: Provide xoff, yoff, width, and heigfht of the window into `ReadAsArray()` for potential speedup
     arr_slc = raster_in.ReadAsArray()
     proj_slc = raster_in.GetProjection()
-    if is_geocoded:
-        geotransform_slc = raster_in.GetGeoTransform()
-    else:
-        geotransform_slc = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+
+    geotransform_slc = raster_in.GetGeoTransform()
 
     # Done with the input SLC raster. de-reference it before forgetting it
     raster_in = None
@@ -199,8 +197,8 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
 
 
     # Calculate the image coord. of CR using its map coord. and geotransformation
-    x_img = (xy_cr[0] - geotransform_slc[0])/geotransform_slc[1]
-    y_img = (xy_cr[1] - geotransform_slc[3])/geotransform_slc[5]
+    x_img = (xy_cr[0] - geotransform_slc[0]) / geotransform_slc[1]
+    y_img = (xy_cr[1] - geotransform_slc[3]) / geotransform_slc[5]
 
 
     # check if the x_img and y_img are within the input SLC
