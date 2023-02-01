@@ -361,7 +361,6 @@ def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
                                  repeat(latlon_cr, num_slc),
                                  repeat(ovs_factor, num_slc),
                                  repeat(window_size, num_slc),
-                                 repeat(is_geocoded, num_slc),
                                  list_path_fig,
                                  repeat(False, num_slc)))
 
