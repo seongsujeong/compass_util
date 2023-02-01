@@ -4,7 +4,7 @@ Collection of routines for validation of COMPASS GSLC products
 '''
 import numpy as np
 import isce3
-from osgeo import osr, gdal
+from osgeo import ogr, osr, gdal
 import h5py
 import glob
 import os
@@ -344,6 +344,8 @@ def get_dem_error(latlonhgt_cr_deg, path_dem):
     # convert the lon / lat of the CR into the map coord. of the DEM
     # TODO; Check if I am using the correct one amohg forward / inverse transformation
     # TODO: Also check which lat/lon order the function takes: lonlat or latlon?
+    # TODO: Replace the interpolator with `isce3.geometry.DEMInterpolator()`
+
     xyz_cr_map = proj_dem.forward(lonlathgt_cr_rad)
 
     # set up the LUT for DEM interpolation
@@ -413,6 +415,48 @@ def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
 
     return dict_out
 
+
+def json_to_shp(path_json_in, path_shp_out, epsg):
+    '''
+    Convert json (output from the stach CR detection) into vector layer
+    '''
+
+    with open(path_json_in, 'r') as fin:
+        dict_in = json.load(fin)
+
+    drv_out = ogr.GetDriverByName('ESRI Shapefile')
+    datasrc_out = drv_out.CreateDataSource(path_shp_out)
+    srs_shp = osr.SpatialReference()
+    srs_shp.ImportFromEPSG(epsg)
+    lyr_out = datasrc_out.CreateLayer('Detected_CR', srs_shp, ogr.wkbPoint)
+
+    field_name = ogr.FieldDefn("NAME", ogr.OFTString)
+    field_name.SetWidth(24)
+    lyr_out.CreateField(field_name)
+
+    # writeout the point into into shape file
+    # Start with the CR
+    feat_cr = ogr.Feature(lyr_out.GetLayerDefn())
+    feat_cr.SetField('NAME', 'CR')
+    xy_cr = dict_in['xy_cr']
+    str_wkt = f'POINT({xy_cr[0]} {xy_cr[1]})'
+    point_cr = ogr.CreateGeometryFromWkt(str_wkt)
+    feat_cr.SetGeometry(point_cr)
+    lyr_out.CreateFeature(feat_cr)
+    feat_cr = None
+    
+    for i, gslc_name in enumerate(dict_in['gslc_name']):
+        feat_out = ogr.Feature(lyr_out.GetLayerDefn())
+        feat_out.SetField('NAME', gslc_name)
+        xy_cr_slc = dict_in['coord_cr_slc']
+        str_wkt = f'POINT({xy_cr_slc[i][0]} {xy_cr_slc[i][1]})'
+        point_cr_slc = ogr.CreateGeometryFromWkt(str_wkt)
+        feat_out.SetGeometry(point_cr_slc)
+        lyr_out.CreateFeature(feat_out)
+
+        feat_out = None
+
+    datasrc_out = None
 
 
 def visualize_cr_dict(list_path_json, list_marker, list_legend=None, figure_size=None, figure_dpi=None, alpha_marker=1.0):
