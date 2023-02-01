@@ -19,7 +19,7 @@ with open(path_json_no_correction, 'w+') as jout1:
     json.dump(dict_1, jout1)
 
 dict_2 = cu.extract_slc_coord_cr_stack_parallel(path_stack_with_correction, latlon_cr, 128, 32, True, 8)
-with open(path_json_no_correction, 'w+') as jout2:
+with open(path_json_with_correction, 'w+') as jout2:
     json.dump(dict_2, jout2)
 
 
