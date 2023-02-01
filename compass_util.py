@@ -154,7 +154,7 @@ def is_hdf5(path_data):
 
 def extract_slc_coord_cr(path_slc, latlon_cr,
                          ovs_factor = 128, window_size = 32,
-                         is_geocoded=True, save_fig=None, verbose=False):
+                         is_geocoded=True, path_fig=None, verbose=False):
     '''
     Extract the corner reflectors' coordinates on SLC
 
@@ -168,7 +168,7 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
         Oversampling factor
     window_size: int
         Size of the image chip
-    save_fig: str
+    path_fig: str
         filename to the plot of the CR detection result;
         if None, the plot will not be saved.
 
@@ -179,7 +179,7 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
     else:
         raster_in = gdal.Open(path_slc, gdal.GA_ReadOnly)
 
-
+    # TODO: Provide xoff, yoff, width, and heigfht of the window into `ReadAsArray()` for potential speedup
     arr_slc = raster_in.ReadAsArray()
     proj_slc = raster_in.GetProjection()
     if is_geocoded:
@@ -218,9 +218,17 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
 
     # find the peak
     slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
-    idx_peak_ovs = np.argmax(np.abs(slc_ov))
+    amp_ov = np.abs(slc_ov)
+    idx_peak_ovs = np.argmax(amp_ov)
     img_peak_ovs = np.unravel_index(idx_peak_ovs, slc_ov.shape)
 
+    # Upper left corner of the oversampled image w.r.t. the original image
+    ulx_ovs = upperleft_x - 0.5*(1 - 1/ovs_factor)
+    uly_ovs = upperleft_y - 0.5*(1 - 1/ovs_factor)
+
+    # Oversampled Peak coordinates w.r.t. the original image's coordinates
+    #imgxy_peak = (ulx_ovs + img_peak_ovs[1]/ovs_factor,
+    #              uly_ovs + img_peak_ovs[0]/ovs_factor)
     imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
                   upperleft_y + img_peak_ovs[0]/ovs_factor)
 
@@ -228,10 +236,62 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
     mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
 
     if verbose:
-        print(f'peak={[mapx_peak, mapy_peak]}, '
-              f'error={[mapx_peak - xy_cr[0], mapy_peak - xy_cr[1]]}')
+        print(f'peak=[{mapx_peak:06f}, {mapy_peak:06f}],\t'
+              f'error=[{mapx_peak - xy_cr[0]:06f}, '
+              f'{mapy_peak - xy_cr[1]:06f}]')
+
+    if path_fig:
+        # Plot the oversampled result, and the detected peak
+        plt.imshow(amp_ov)
+        plt.plot(img_peak_ovs[1], img_peak_ovs[0], 'r+')
+        plt.xlim([0, amp_ov.shape[1]])
+        plt.ylim([amp_ov.shape[0], 0])
+        plt.savefig(path_fig)
+        plt.close()
+
+        # plot the peak on the original image chip i.e. before oversampling
+        plt.imshow(np.abs(slc_sub))
+        plt.plot(imgxy_peak[0]-upperleft_x, imgxy_peak[1]-upperleft_y, 'r+')
+        plt.xlim([0, slc_sub.shape[1]])
+        plt.ylim([slc_sub.shape[0], 0])
+        #plt.plot(17.8515625, 16.3046875, 'rx') # temo code
+        plt.savefig(path_fig.replace('.png','_original_scale.png'))
+        plt.close()
 
     return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1], os.path.basename(path_slc))
+
+
+def signal_to_background_ratio(slc_in, amp_peak, thres_tail = 0.03, to_db=True):
+    '''
+    docstring please
+    TODO: Talk to others if the algorithm makes sense
+    '''
+    if np.iscomplexobj(slc_in):
+        arr_in = np.abs(slc_in)
+    else:
+        arr_in = slc_in
+
+    mask_low = arr_in > np.nanquantile(arr_in, thres_tail)
+    mask_high = arr_in < np.nanquantile(arr_in, 1 - thres_tail)
+
+    arr_background = np.ma.masked_array(arr_in, mask_low & mask_high)
+    std_background = np.nanstd(arr_background)
+
+    if to_db:
+        return np.log10(amp_peak / std_background) * 10
+    else:
+        return amp_peak / std_background
+
+
+#def extract_slc_coord_cr_batch(path_slc, path_csv,
+#                               ovs_factor=128, window_size=32,
+#                               col_cr_id = 0, col_lat=1, col_lon=2, col_hgt=3):
+    # Load the CSV
+
+    # Identify the lat/lon/hgt from the loaded csv
+
+
+
 
 
 def extract_slc_coord_cr_stack(dir_stack, latlon_cr,
@@ -260,11 +320,57 @@ def extract_slc_coord_cr_stack(dir_stack, latlon_cr,
             dict_out['xy_cr'] = coords[2:4]
         dict_out['gslc_name'].append(os.path.basename(path_slc))
         dict_out['coord_cr_slc'].append(coords[0:2])
-        
+
 
     return dict_out
 
+def get_dem_error(latlonhgt_cr_deg, path_dem):
+    '''
+    Calculate the height error of input CR whose coordinate is llh
+    '''
 
+    
+    dem_raster = isce3.io.Raster(path_dem)
+    epsg_dem = dem_raster.get_epsg()
+    proj_dem = isce3.core.make_projection(epsg_dem)
+
+    # convert the input llh_cr into radians
+    #llh_cr_rad = np.deg2rad(latlonhgt_cr_deg)
+    #llh_cr_rad[2] = latlonhgt_cr_deg[2]
+    lonlathgt_cr_rad = np.array([np.deg2rad(latlonhgt_cr_deg[1]),
+                                 np.deg2rad(latlonhgt_cr_deg[0]),
+                                 latlonhgt_cr_deg[2]])
+
+    # convert the lon / lat of the CR into the map coord. of the DEM
+    # TODO; Check if I am using the correct one amohg forward / inverse transformation
+    # TODO: Also check which lat/lon order the function takes: lonlat or latlon?
+    xyz_cr_map = proj_dem.forward(lonlathgt_cr_rad)
+
+    # set up the LUT for DEM interpolation
+    gdal_raster_dem = gdal.Open(path_dem, gdal.GA_ReadOnly)
+    arr_elev = gdal_raster_dem.ReadAsArray()
+    gdal_raster_dem = None # De-reference after done with reading the data
+    geotransform_dem = dem_raster.get_geotransform()
+
+    # Extract the elev.arrays
+    imgx_cr = int((xyz_cr_map[0] - geotransform_dem[0]) / geotransform_dem[1] + 0.5)
+    imgy_cr = int((xyz_cr_map[1] - geotransform_dem[3]) / geotransform_dem[5] + 0.5)
+
+    grid_x = np.arange(dem_raster.width) * dem_raster.dx + geotransform_dem[0]
+    grid_y = np.arange(dem_raster.length) * dem_raster.dy + geotransform_dem[3]
+
+    # extract the subset around the CR
+    radius_px = 10
+    arr_elev_sub = arr_elev[imgy_cr - radius_px : imgy_cr + radius_px,
+                            imgx_cr - radius_px : imgx_cr + radius_px]
+
+    grid_x_sub = grid_x[imgx_cr - radius_px : imgx_cr + radius_px]
+    grid_y_sub = grid_y[imgy_cr - radius_px : imgy_cr + radius_px]
+
+    lut_dem_sub = isce3.core.LUT2d(grid_x_sub, grid_y_sub, arr_elev_sub)
+
+    print(lut_dem_sub.eval(xyz_cr_map[1], xyz_cr_map[0]))
+    return None
 
 def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
                                         ovs_factor: int=128, window_size: int=32,
@@ -274,6 +380,8 @@ def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
     '''
     list_slc = glob.glob(f'{dir_stack}/**/*.h5', recursive=True)
     list_slc.sort()
+
+    list_path_fig = [f'{slc}.png' for slc in list_slc]
 
     num_slc = len(list_slc)
     print(f'{num_slc} SLCs are found')
@@ -285,8 +393,8 @@ def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
                                  repeat(ovs_factor, num_slc),
                                  repeat(window_size, num_slc),
                                  repeat(is_geocoded, num_slc),
-                                 repeat(False, num_slc),
-                                 repeat(True, num_slc)))
+                                 list_path_fig,
+                                 repeat(False, num_slc)))
 
     # sort `rtn_coords` w.r.t. the CSLC file name
     # (i.e. last entry in each elements in `rtn_coords`)
@@ -335,27 +443,5 @@ def visualize_cr_dict(list_path_json, list_marker, list_legend=None, figure_size
     plt.axis('equal')
     plt.xlabel('diff_x (m)')
     plt.ylabel('diff_y (m)')
+    plt.clear()
 
-    plt.show()
-
-
-## test code
-if __name__=='__main__':
-    path_slc_no_corr = '/Users/jeong/Documents/OPERA_SCRATCH/CSLC/LUT_CORRECTION_TEST_SITE/output_s1_cslc_no_correction/t064_135523_iw2/20221016/t064_135523_iw2_20221016_VV.h5'
-    path_slc_all_corr = '/Users/jeong/Documents/OPERA_SCRATCH/CSLC/LUT_CORRECTION_TEST_SITE/output_s1_cslc_all_correction/t064_135523_iw2/20221016/t064_135523_iw2_20221016_VV.h5'
-    latlon_cr = [34.80549368, -118.070803]
-    rt0 = extract_slc_coord_cr(path_slc_no_corr,
-                              latlon_cr,
-                              True,
-                              128, 32)
-    print(rt0[0] - rt0[2])
-    print(rt0[1] - rt0[3])
-    
-    rt1 = extract_slc_coord_cr(path_slc_all_corr,
-                              latlon_cr,
-                              True,
-                              128, 32)
-    print(rt1[0] - rt1[2])
-    print(rt1[1] - rt1[3])
-
-    print('asdfa')
