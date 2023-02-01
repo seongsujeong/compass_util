@@ -221,17 +221,37 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
     img_peak_ovs = np.unravel_index(idx_peak_ovs, slc_ov.shape)
 
     # Upper left corner of the oversampled image w.r.t. the original image
-    ulx_ovs = upperleft_x - 0.5*(1 - 1/ovs_factor)
-    uly_ovs = upperleft_y - 0.5*(1 - 1/ovs_factor)
-
+    #ulx_ovs = upperleft_x - 0.5*(1 - 1/ovs_factor)
+    #uly_ovs = upperleft_y - 0.5*(1 - 1/ovs_factor)
+    
     # Oversampled Peak coordinates w.r.t. the original image's coordinates
-    #imgxy_peak = (ulx_ovs + img_peak_ovs[1]/ovs_factor,
-    #              uly_ovs + img_peak_ovs[0]/ovs_factor)
     imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
                   upperleft_y + img_peak_ovs[0]/ovs_factor)
 
-    mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
-    mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
+    # From Heresh's drawing
+    dX = geotransform_slc[1]
+    dY = geotransform_slc[5]
+    X0 = geotransform_slc[0]
+    Y0 = geotransform_slc[3]
+    X_chip = X0 + dX * upperleft_x
+    Y_chip = Y0 + dY * upperleft_y
+    
+    dX1 = dX / ovs_factor
+    dY1 = dY / ovs_factor
+    X1 = X_chip + dX1/2
+    Y1 = Y_chip + dY1/2
+
+    X_CR = X1 + img_peak_ovs[1] * dX1
+    Y_CR = Y1 + img_peak_ovs[0] * dY1
+
+
+    #mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
+    #mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
+
+    # Based on the cartoon
+    mapx_peak = X_CR
+    mapy_peak = Y_CR
+
 
     if verbose:
         print(f'peak=[{mapx_peak:06f}, {mapy_peak:06f}],\t'
