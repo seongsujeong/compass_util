@@ -84,6 +84,8 @@ def spawn_runconfig(arg_in):
 
     list_burst_id = runconfig_dict_ref['runconfig']['groups']['input_file_group']['burst_id']
     if list_burst_id is None:
+        print('Burst list was not provided in the reference runconfig.'
+              ' Finding the common bursts in the SAFE data list.')
         list_burst_id = find_common_bursts(list_safe)
 
     os.makedirs(arg_in.dir_orbit, exist_ok=True)
