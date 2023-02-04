@@ -419,7 +419,7 @@ def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
                                  repeat(window_size, num_slc),
                                  repeat(pol, num_slc),
                                  list_path_fig,
-                                 repeat(False, num_slc)))
+                                 repeat(True, num_slc)))
 
     # sort `rtn_coords` w.r.t. the CSLC file name
     # (i.e. last entry in each elements in `rtn_coords`)
