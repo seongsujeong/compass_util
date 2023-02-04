@@ -16,9 +16,11 @@ import json
 from itertools import repeat
 
 
-def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
+def extract_slc_old(path_slc_in: str, path_amp_out: str, pol: str='VV',
                 to_amplitude = False, to_mem=False):
-    '''Extract CSLC data from HDF5 file.'''
+    '''Extract CSLC data from HDF5 file.
+    
+    NOTE: TO BE DEPRECATED'''
 
     # TODO: Implement to apply multilook
     with h5py.File(path_slc_in, 'r') as hin:
@@ -71,7 +73,36 @@ def extract_slc(path_slc_in: str, path_amp_out: str, pol: str='VV',
         return None
 
 
-def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, ncpu=4):
+def extract_slc_amp(path_slc_in: str, path_amp_out: str, pol: str='VV'):
+    '''Extract CSLC data from HDF5 file.'''
+
+    path_raster_in = ('DERIVED_SUBDATASET:AMPLITUDE:NETCDF:'
+                     f'{path_slc_in}:/science/SENTINEL1/CSLC/grids/{pol}')
+
+    raster_in = gdal.Open(path_raster_in, gdal.GA_ReadOnly)
+    arr_in = raster_in.ReadAsArray().astype(np.float32)
+    geotransform_in = raster_in.GetGeoTransform()
+    proj_in = raster_in.GetProjection()
+    ncols = arr_in.shape[1]
+    nrows = arr_in.shape[0]
+
+    drv_out = gdal.GetDriverByName('GTiff')
+    option_raster_out = ['COMPRESS=LZW', 'BIGTIFF=YES']
+    
+    
+    raster_out = drv_out.Create(path_amp_out, ncols, nrows,
+                            1, gdal.GDT_Float32, option_raster_out)
+
+    raster_out.WriteArray(arr_slc_in)
+    
+    raster_out.SetGeoTransform(geotransform_in)
+    raster_out.SetProjection(proj_in)
+
+    raster_out.FlushCache()
+
+
+
+def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, pol='VV', ncpu=4):
     '''
     Search the list of SLC files. Convert them into amplitude images
     '''
@@ -84,11 +115,11 @@ def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, ncpu=4):
 
     # adjust the number of workers if necessary
     if num_slc_in < ncpu:
-        ncpu=num_slc_in
+        ncpu = num_slc_in
 
     list_flag_amp = [True] * num_slc_in
-    list_flag_mem = [False] * num_slc_in
-    list_pol = ['VV'] * num_slc_in
+    #list_flag_mem = [False] * num_slc_in
+    list_pol = [pol] * num_slc_in
 
     # pre-define the output tiff file names for parallel processing
     list_amp_out = [None] * num_slc_in
@@ -98,12 +129,10 @@ def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, ncpu=4):
         list_amp_out[i_slc] = path_amp
 
     with multiprocessing.Pool(ncpu) as p:
-        p.starmap(extract_slc,
+        p.starmap(extract_slc_amp,
                   zip(list_slc_in,
                       list_amp_out,
-                      list_pol,
-                      list_flag_amp,
-                      list_flag_mem))
+                      list_pol))
 
 
 def form_interferogram(path_slc_ref:str, path_slc_sec:str, path_ifg_out:str):
@@ -112,6 +141,7 @@ def form_interferogram(path_slc_ref:str, path_slc_sec:str, path_ifg_out:str):
     placeholder
     '''
     pass
+    # TODO Consider using the functionality in DOLPHIN
 
 
 def mosaic_raster(list_raster_in: str, path_raster_mosaic: str):
@@ -120,6 +150,7 @@ def mosaic_raster(list_raster_in: str, path_raster_mosaic: str):
     placeholder
     '''
     pass
+    # TODO Consider using the functionality in DOLPHIN
 
 
 def load_cr_coord_csv(path_cr_csv):
@@ -152,8 +183,8 @@ def is_hdf5(path_data):
         return False
 
 
-def extract_slc_coord_cr(path_slc, latlon_cr,
-                         ovs_factor = 128, window_size = 32,
+def extract_gslc_coord_cr(path_gslc, latlon_cr,
+                         ovs_factor = 128, window_size = 32, pol='VV',
                          path_fig=None, verbose=False):
     '''
     Extract the corner reflectors' coordinates on SLC
@@ -174,12 +205,11 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
 
     '''
 
-    if is_hdf5(path_slc):
-        raster_in = extract_slc(path_slc, path_slc+'.slc', 'VV', False, True)
-    else:
-        raster_in = gdal.Open(path_slc, gdal.GA_ReadOnly)
+    raster_in = gdal.Open(f'NETCDF:{path_gslc}:/science/SENTINEL1/CSLC/grids/{pol}',
+                          gdal.GA_ReadOnly)
 
-    # TODO: Provide xoff, yoff, width, and heigfht of the window into `ReadAsArray()` for potential speedup
+    # TODO: Provide xoff, yoff, width, and heigfht of the window into
+    #       `ReadAsArray()` for potential speedup
     arr_slc = raster_in.ReadAsArray()
     proj_slc = raster_in.GetProjection()
 
@@ -276,7 +306,7 @@ def extract_slc_coord_cr(path_slc, latlon_cr,
         plt.savefig(path_fig.replace('.png','_original_scale.png'))
         plt.close()
 
-    return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1], os.path.basename(path_slc))
+    return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1], os.path.basename(path_gslc))
 
 
 def signal_to_background_ratio(slc_in, amp_peak, thres_tail = 0.03, to_db=True):
@@ -363,8 +393,9 @@ def get_dem_error(latlonhgt_cr_deg, path_dem):
     print(lut_dem_sub.eval(xyz_cr_map[1], xyz_cr_map[0]))
     return None
 
+
 def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
-                                        ovs_factor: int=128, window_size: int=32,
+                                        ovs_factor: int=128, window_size: int=32, pol='VV',
                                         is_geocoded: bool=True, ncpu: int=6):
     '''
     Docstring here
@@ -376,13 +407,18 @@ def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
 
     num_slc = len(list_slc)
     print(f'{num_slc} SLCs are found')
-
+    '''
+    def extract_gslc_coord_cr(path_gslc, latlon_cr,
+                         ovs_factor = 128, window_size = 32, pol='VV',
+                         path_fig=None, verbose=False):
+    '''
     with multiprocessing.Pool(ncpu) as p:
-        list_coords = p.starmap(extract_slc_coord_cr,
+        list_coords = p.starmap(extract_gslc_coord_cr,
                              zip(list_slc,
                                  repeat(latlon_cr, num_slc),
                                  repeat(ovs_factor, num_slc),
                                  repeat(window_size, num_slc),
+                                 repeat(pol, num_slc),
                                  list_path_fig,
                                  repeat(False, num_slc)))
 
