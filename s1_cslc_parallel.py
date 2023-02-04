@@ -20,6 +20,7 @@ dict_pol_to_load = {
     '1SHV':'HV',
 }
 
+
 def get_all_burst_id(path_safe):
     '''
     Docstring here
@@ -119,7 +120,6 @@ def spawn_runconfig(arg_in):
     return runconfig_burst_list
 
 
-
 def get_parser():
     '''Initialize YamlArgparse class and parse CLI arguments for OPERA RTC.
     Modified after copied from `rtc_s1.py`
@@ -167,8 +167,6 @@ def get_parser():
                         help='Enable full formatting of log messages')
 
     return parser
-
-
 
 
 def process_runconfig(path_runconfig_burst):
