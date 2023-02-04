@@ -93,7 +93,7 @@ def extract_slc_amp(path_slc_in: str, path_amp_out: str, pol: str='VV'):
     raster_out = drv_out.Create(path_amp_out, ncols, nrows,
                             1, gdal.GDT_Float32, option_raster_out)
 
-    raster_out.WriteArray(arr_slc_in)
+    raster_out.WriteArray(arr_in)
     
     raster_out.SetGeoTransform(geotransform_in)
     raster_out.SetProjection(proj_in)
