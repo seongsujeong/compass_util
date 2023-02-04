@@ -253,10 +253,16 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
     # Upper left corner of the oversampled image w.r.t. the original image
     #ulx_ovs = upperleft_x - 0.5*(1 - 1/ovs_factor)
     #uly_ovs = upperleft_y - 0.5*(1 - 1/ovs_factor)
+    #imgxy_peak = (ulx_ovs + img_peak_ovs[1]/ovs_factor,
+    #              uly_ovs + img_peak_ovs[0]/ovs_factor)
+
     
     # Oversampled Peak coordinates w.r.t. the original image's coordinates
-    imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
-                  upperleft_y + img_peak_ovs[0]/ovs_factor)
+    #imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
+    #              upperleft_y + img_peak_ovs[0]/ovs_factor)
+    
+    #mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
+    #mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
 
     # From Heresh's drawing
     dX = geotransform_slc[1]
@@ -273,12 +279,7 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
 
     X_CR = X1 + img_peak_ovs[1] * dX1
     Y_CR = Y1 + img_peak_ovs[0] * dY1
-
-
-    #mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
-    #mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
-
-    # Based on the cartoon
+    
     mapx_peak = X_CR
     mapy_peak = Y_CR
 
@@ -329,17 +330,6 @@ def signal_to_background_ratio(slc_in, amp_peak, thres_tail = 0.03, to_db=True):
         return np.log10(amp_peak / std_background) * 10
     else:
         return amp_peak / std_background
-
-
-def extract_slc_coord_cr_batch(path_slc, path_csv,
-                               ovs_factor=128, window_size=32,
-                               col_cr_id = 0, col_lat=1, col_lon=2, col_hgt=3):
-    # Load the CSV
-
-    # Identify the lat/lon/hgt from the loaded csv
-
-    # Placeholder for now...
-    pass
 
 
 def get_dem_error(latlonhgt_cr_deg, path_dem):
@@ -439,7 +429,7 @@ def extract_slc_coord_cr_stack_parallel(dir_stack: str, latlon_cr: list,
     return dict_out
 
 
-def json_to_shp(path_json_in, path_shp_out, epsg):
+def stack_json_to_shp(path_json_in, path_shp_out, epsg):
     '''
     Convert json (output from the stach CR detection) into vector layer
     '''
