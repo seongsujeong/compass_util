@@ -331,16 +331,15 @@ def signal_to_background_ratio(slc_in, amp_peak, thres_tail = 0.03, to_db=True):
         return amp_peak / std_background
 
 
-#def extract_slc_coord_cr_batch(path_slc, path_csv,
-#                               ovs_factor=128, window_size=32,
-#                               col_cr_id = 0, col_lat=1, col_lon=2, col_hgt=3):
+def extract_slc_coord_cr_batch(path_slc, path_csv,
+                               ovs_factor=128, window_size=32,
+                               col_cr_id = 0, col_lat=1, col_lon=2, col_hgt=3):
     # Load the CSV
 
     # Identify the lat/lon/hgt from the loaded csv
 
     # Placeholder for now...
-
-
+    pass
 
 
 def get_dem_error(latlonhgt_cr_deg, path_dem):
