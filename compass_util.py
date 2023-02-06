@@ -14,6 +14,25 @@ import matplotlib.pyplot as plt
 import multiprocessing
 import json
 from itertools import repeat
+import datetime
+from scipy.interpolate import interp2d
+
+def oversample_npy(slc_sub, ovs_factor):
+    nrow_in, ncol_in = slc_sub.shape
+
+    x_in = np.arange(ncol_in)
+    y_in = np.arange(nrow_in)
+
+    interpolator = interp2d(x_in, y_in, slc_sub)
+    
+    x_out = np.arange(ncol_in * ovs_factor) / ovs_factor
+    y_out = np.arange(nrow_in * ovs_factor) / ovs_factor
+
+    slc_ovs = interpolator(x_out, y_out)
+    
+    
+
+    return slc_ovs
 
 
 def extract_slc_old(path_slc_in: str, path_amp_out: str, pol: str='VV',
@@ -243,12 +262,18 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
 
     # Extract the image chip from source SLC
     slc_sub = arr_slc[upperleft_y:lowerright_y, upperleft_x:lowerright_x]
+    
+    slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
+    #slc_ov =  oversample_npy(slc_sub, ovs_factor)
+    amp_ov = np.abs(slc_ov)
+
+    # Try to oversample the amplitude of the SLC chip
+    #amp_sub = np.abs(slc_sub)
+    #amp_ov = isce3.signal.point_target_info.oversample(amp_sub, ovs_factor, baseband=True)
 
     # find the peak
-    slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
-    amp_ov = np.abs(slc_ov)
     idx_peak_ovs = np.argmax(amp_ov)
-    img_peak_ovs = np.unravel_index(idx_peak_ovs, slc_ov.shape)
+    img_peak_ovs = np.unravel_index(idx_peak_ovs, amp_ov.shape)
 
     # Upper left corner of the oversampled image w.r.t. the original image
     #ulx_ovs = upperleft_x - 0.5*(1 - 1/ovs_factor)
@@ -258,8 +283,8 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
 
     
     # Oversampled Peak coordinates w.r.t. the original image's coordinates
-    #imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
-    #              upperleft_y + img_peak_ovs[0]/ovs_factor)
+    imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
+                  upperleft_y + img_peak_ovs[0]/ovs_factor)
     
     #mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
     #mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
@@ -306,6 +331,25 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
         #plt.plot(17.8515625, 16.3046875, 'rx') # temo code
         plt.savefig(path_fig.replace('.png','_original_scale.png'))
         plt.close()
+
+
+    # Temporary code to export the ovesampled image window as GEOTIFF
+    str_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    drvout = gdal.GetDriverByName('GTiff')
+    raster_out = drvout.Create(f'{path_gslc}.ovs.{str_time}.tif',
+                                amp_ov.shape[1],
+                                amp_ov.shape[0],
+                                1,
+                                gdal.GDT_Float32,
+                                ['COMPRESS=LZW', 'BIGTIFF=YES'])
+
+    raster_out.WriteArray(amp_ov)
+    
+    raster_out.SetGeoTransform((X_chip, dX1, 0,
+                                Y_chip, 0, dY1))
+    raster_out.SetProjection(proj_slc)
+
+    raster_out.FlushCache()
 
     return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1], os.path.basename(path_gslc))
 
