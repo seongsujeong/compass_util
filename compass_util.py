@@ -17,13 +17,53 @@ from itertools import repeat
 import datetime
 from scipy.interpolate import interp2d
 
+
+
+
+def overSamplePatch(patch, overSample=7):
+    '''
+    Oversample a patch of synthetic data
+    from the link below:
+    https://github.com/fastice/specklesim/blob/690bd278c8933c7836ab2c7475b23d3fcf367b65/speckleSim.py
+    
+    Parameters
+    ----------
+    patch : complex data
+        Patch with synthetic data.
+    overSample : int, optional
+        Oversample factor. The default is 7.
+    Returns
+    -------
+    patchOver : 2D complex data
+        Oversampled data.
+    '''
+    #
+    osShape = tuple(x * overSample for x in patch.shape)
+    fftZeroPad = np.zeros(osShape, dtype=np.complex64)
+    # For now only use even oversample
+    if patch.shape[0] % 2 != 0 or patch.shape[0] % 2 != 0:
+        print(f'use even patch for oversampling {patch.shape}')
+        exit()
+    #
+    r0, c0 = int(osShape[0] / 2), int(osShape[1] / 2)  # patch centers
+    rhw, chw = int(patch.shape[0]/2), int(patch.shape[1]/2)  # patch half width
+    # fft forward
+    fftForward = np.fft.fft2(patch)
+    # zero pad to acomplish oversample
+    fftZeroPad[r0 - rhw: r0 + rhw, c0 - chw: c0 + chw] = \
+        np.fft.fftshift(fftForward)
+    # inverse transform
+    patchOver = np.fft.ifft2(np.fft.ifftshift(fftZeroPad)) * overSample**2
+    return patchOver.astype(np.complex64)
+
+
 def oversample_npy(slc_sub, ovs_factor):
     nrow_in, ncol_in = slc_sub.shape
 
     x_in = np.arange(ncol_in)
     y_in = np.arange(nrow_in)
 
-    interpolator = interp2d(x_in, y_in, slc_sub)
+    interpolator = interp2d(x_in, y_in, slc_sub, 'cubic')
     
     x_out = np.arange(ncol_in * ovs_factor) / ovs_factor
     y_out = np.arange(nrow_in * ovs_factor) / ovs_factor
@@ -264,6 +304,10 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
     slc_sub = arr_slc[upperleft_y:lowerright_y, upperleft_x:lowerright_x]
     
     slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
+    #slc_ov =  overSamplePatch(slc_sub, ovs_factor)
+
+    
+    
     #slc_ov =  oversample_npy(slc_sub, ovs_factor)
     amp_ov = np.abs(slc_ov)
 
@@ -302,8 +346,16 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
     X1 = X_chip + dX1/2
     Y1 = Y_chip + dY1/2
 
-    X_CR = X1 + img_peak_ovs[1] * dX1
-    Y_CR = Y1 + img_peak_ovs[0] * dY1
+    #X_CR = X1 + img_peak_ovs[1] * dX1
+    #Y_CR = Y1 + img_peak_ovs[0] * dY1
+
+    # New formula based on point sampling assumption
+    X_CR = X_chip + dX/2 + img_peak_ovs[1]*dX1
+    Y_CR = Y_chip + dY/2 + img_peak_ovs[0]*dY1
+
+    #To take care of half-pixel bias in the geotransformation
+    #X_CR += dX/2
+    #Y_CR += dY/2
     
     mapx_peak = X_CR
     mapy_peak = Y_CR
@@ -334,22 +386,21 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
 
 
     # Temporary code to export the ovesampled image window as GEOTIFF
-    str_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    drvout = gdal.GetDriverByName('GTiff')
-    raster_out = drvout.Create(f'{path_gslc}.ovs.{str_time}.tif',
-                                amp_ov.shape[1],
-                                amp_ov.shape[0],
-                                1,
-                                gdal.GDT_Float32,
-                                ['COMPRESS=LZW', 'BIGTIFF=YES'])
-
-    raster_out.WriteArray(amp_ov)
-    
-    raster_out.SetGeoTransform((X_chip, dX1, 0,
-                                Y_chip, 0, dY1))
-    raster_out.SetProjection(proj_slc)
-
-    raster_out.FlushCache()
+    #str_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    #drvout = gdal.GetDriverByName('GTiff')
+    #raster_out = drvout.Create(f'{path_gslc}.ovs.{str_time}.ovs{ovs_factor}.tif',
+    #                            amp_ov.shape[1],
+    #                            amp_ov.shape[0],
+    #                            1,
+    #                            gdal.GDT_Float32,
+    #                            ['COMPRESS=LZW', 'BIGTIFF=YES'])
+    #raster_out.WriteArray(amp_ov)
+    #
+    #raster_out.SetGeoTransform((X_chip + 0.5*(1-1/ovs_factor)*dX, dX1, 0,
+    #                            Y_chip + 0.5*(1-1/ovs_factor)*dY, 0, dY1))
+    #raster_out.SetProjection(proj_slc)
+    #
+    #raster_out.FlushCache()
 
     return (mapx_peak, mapy_peak, xy_cr[0], xy_cr[1], os.path.basename(path_gslc))
 
