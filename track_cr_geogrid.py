@@ -77,6 +77,5 @@ if __name__=='__main__':
     cr_detection_result = cu.extract_gslc_coord_cr(args.path_gslc,
                                                    latlon_cr,
                                                    args.ovs_factor,
-                                                   args.width_window)
-    
-    print('asdfs')
+                                                   args.width_window,
+                                                   verbose=True)
