@@ -16,120 +16,16 @@ import json
 from itertools import repeat
 import datetime
 from scipy.interpolate import interp2d
+import isce3
 
-
-
-
-def overSamplePatch(patch, overSample=7):
+def get_epsg_gslc(path_gslc, pol='VV'):
     '''
-    Oversample a patch of synthetic data
-    from the link below:
-    https://github.com/fastice/specklesim/blob/690bd278c8933c7836ab2c7475b23d3fcf367b65/speckleSim.py
-    
-    Parameters
-    ----------
-    patch : complex data
-        Patch with synthetic data.
-    overSample : int, optional
-        Oversample factor. The default is 7.
-    Returns
-    -------
-    patchOver : 2D complex data
-        Oversampled data.
+    A convenient function to get the EPSG of GSLC
     '''
-    #
-    osShape = tuple(x * overSample for x in patch.shape)
-    fftZeroPad = np.zeros(osShape, dtype=np.complex64)
-    # For now only use even oversample
-    if patch.shape[0] % 2 != 0 or patch.shape[0] % 2 != 0:
-        print(f'use even patch for oversampling {patch.shape}')
-        exit()
-    #
-    r0, c0 = int(osShape[0] / 2), int(osShape[1] / 2)  # patch centers
-    rhw, chw = int(patch.shape[0]/2), int(patch.shape[1]/2)  # patch half width
-    # fft forward
-    fftForward = np.fft.fft2(patch)
-    # zero pad to acomplish oversample
-    fftZeroPad[r0 - rhw: r0 + rhw, c0 - chw: c0 + chw] = \
-        np.fft.fftshift(fftForward)
-    # inverse transform
-    patchOver = np.fft.ifft2(np.fft.ifftshift(fftZeroPad)) * overSample**2
-    return patchOver.astype(np.complex64)
 
-
-def oversample_npy(slc_sub, ovs_factor):
-    nrow_in, ncol_in = slc_sub.shape
-
-    x_in = np.arange(ncol_in)
-    y_in = np.arange(nrow_in)
-
-    interpolator = interp2d(x_in, y_in, slc_sub, 'cubic')
+    raster_gslc = isce3.io.Raster(f'NETCDF:"{path_gslc}":/science/SENTINEL1/CSLC/grids/{pol}')
     
-    x_out = np.arange(ncol_in * ovs_factor) / ovs_factor
-    y_out = np.arange(nrow_in * ovs_factor) / ovs_factor
-
-    slc_ovs = interpolator(x_out, y_out)
-    
-    
-
-    return slc_ovs
-
-
-def extract_slc_old(path_slc_in: str, path_amp_out: str, pol: str='VV',
-                to_amplitude = False, to_mem=False):
-    '''Extract CSLC data from HDF5 file.
-    
-    NOTE: TO BE DEPRECATED'''
-
-    # TODO: Implement to apply multilook
-    with h5py.File(path_slc_in, 'r') as hin:
-        arr_slc = np.array(hin[f'/science/SENTINEL1/CSLC/grids/{pol}'])
-        x_coords = np.array(hin['/science/SENTINEL1/CSLC/grids/x_coordinates'])
-        y_coords = np.array(hin['/science/SENTINEL1/CSLC/grids/y_coordinates'])
-        str_wkt_projection = str(hin['/science/SENTINEL1/CSLC/grids/projection'].\
-                                 attrs['spatial_ref'].decode())
-
-    option_gtiff = ['COMPRESS=LZW', 'BIGTIFF=YES']
-    option_mem = []
-
-    ncols = arr_slc.shape[1]
-    nrows = arr_slc.shape[0]
-
-    # Calculate geotransformation parameters
-    x_start = x_coords[0]
-    y_start = y_coords[0]
-
-    spacing_x = (x_coords[-1] - x_coords[0]) / (ncols-1)
-    spacing_y = (y_coords[-1] - y_coords[0]) / (nrows-1)
-
-    if to_mem:
-        drv_out = gdal.GetDriverByName('MEM')
-        option_raster = option_mem
-    else:
-        drv_out = gdal.GetDriverByName('GTiff')
-        option_raster = option_gtiff
-
-    if to_amplitude:
-        raster_out = drv_out.Create(path_amp_out, ncols, nrows,
-                                1, gdal.GDT_Float32, option_raster)
-        raster_out.WriteArray(np.abs(arr_slc))
-    else:
-        raster_out = drv_out.Create(path_amp_out, ncols, nrows,
-                                1, gdal.GDT_CFloat32, option_raster)
-        raster_out.WriteArray(arr_slc)
-
-    raster_out.SetGeoTransform((x_start, spacing_x, 0,
-                                y_start, 0, spacing_y))
-    raster_out.SetProjection(str_wkt_projection)
-
-    raster_out.FlushCache()
-
-    if to_mem:
-        return raster_out
-    else:
-        # de-reference the raster object
-        raster_out = None
-        return None
+    return raster_gslc.get_epsg()
 
 
 def extract_slc_amp(path_slc_in: str, path_amp_out: str, pol: str='VV'):
@@ -304,35 +200,17 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
     slc_sub = arr_slc[upperleft_y:lowerright_y, upperleft_x:lowerright_x]
     
     slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
-    #slc_ov =  overSamplePatch(slc_sub, ovs_factor)
-
-    
-    
-    #slc_ov =  oversample_npy(slc_sub, ovs_factor)
     amp_ov = np.abs(slc_ov)
-
-    # Try to oversample the amplitude of the SLC chip
-    #amp_sub = np.abs(slc_sub)
-    #amp_ov = isce3.signal.point_target_info.oversample(amp_sub, ovs_factor, baseband=True)
 
     # find the peak
     idx_peak_ovs = np.argmax(amp_ov)
     img_peak_ovs = np.unravel_index(idx_peak_ovs, amp_ov.shape)
-
-    # Upper left corner of the oversampled image w.r.t. the original image
-    #ulx_ovs = upperleft_x - 0.5*(1 - 1/ovs_factor)
-    #uly_ovs = upperleft_y - 0.5*(1 - 1/ovs_factor)
-    #imgxy_peak = (ulx_ovs + img_peak_ovs[1]/ovs_factor,
-    #              uly_ovs + img_peak_ovs[0]/ovs_factor)
 
     
     # Oversampled Peak coordinates w.r.t. the original image's coordinates
     imgxy_peak = (upperleft_x + img_peak_ovs[1]/ovs_factor,
                   upperleft_y + img_peak_ovs[0]/ovs_factor)
     
-    #mapx_peak = geotransform_slc[0] + imgxy_peak[0]*geotransform_slc[1]
-    #mapy_peak = geotransform_slc[3] + imgxy_peak[1]*geotransform_slc[5]
-
     # From Heresh's drawing
     dX = geotransform_slc[1]
     dY = geotransform_slc[5]
@@ -346,16 +224,10 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
     X1 = X_chip + dX1/2
     Y1 = Y_chip + dY1/2
 
-    #X_CR = X1 + img_peak_ovs[1] * dX1
-    #Y_CR = Y1 + img_peak_ovs[0] * dY1
-
     # New formula based on point sampling assumption
     X_CR = X_chip + dX/2 + img_peak_ovs[1]*dX1
     Y_CR = Y_chip + dY/2 + img_peak_ovs[0]*dY1
 
-    #To take care of half-pixel bias in the geotransformation
-    #X_CR += dX/2
-    #Y_CR += dY/2
     
     mapx_peak = X_CR
     mapy_peak = Y_CR
@@ -596,4 +468,68 @@ def visualize_cr_dict(list_path_json, list_marker, list_legend=None, figure_size
     plt.xlabel('diff_x (m)')
     plt.ylabel('diff_y (m)')
     plt.clear()
+
+
+def export_cr_detection_result(cr_detection_result_list,
+                               point_name_list,
+                               epsg_gslc,
+                               path_geojson_out,
+                               geojson_name="Untitled",
+                               cr_name = 'NOT_SPECIFIED'):
+    '''
+    Write out the CR derection result into GEOJSON
+    '''
+
+    num_results = len(cr_detection_result_list)
+
+    # Prepare to write the geojson
+    dict_out = {
+        "type": "FeatureCollection",
+        "name": geojson_name,
+        "crs": {
+            "type": "name",
+            "properties": {
+                "name": f"urn:ogc:def:crs:EPSG::{epsg_gslc}"
+            }
+        },
+        "features": [None] * (num_results + 1)
+    }
+
+    # Write out the feature for the CR
+    dict_out['features'][0] =\
+        {
+        "type": "Feature",
+        "properties": {
+            "NAME": cr_name
+        },
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                cr_detection_result_list[0][2],
+                cr_detection_result_list[0][3]
+            ]
+        }
+    }
+
+    # iterate over the return list, and populate the features in the output geojson
+    for i_feat, rtn in enumerate(cr_detection_result_list):
+        dict_out['features'][i_feat + 1] = {
+            "type": "Feature",
+            "properties": {
+                "NAME": point_name_list[i_feat]
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    cr_detection_result_list[i_feat][0],
+                    cr_detection_result_list[i_feat][1]
+                ]
+            }
+        }
+
+    # write out hte json file
+    with open(path_geojson_out, 'w+') as fout:
+        json.dump(dict_out, fout)
+
+
 
