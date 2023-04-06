@@ -55,6 +55,12 @@ def get_parser():
                         default=None,
                         help='Path to the output file')
     
+    parser.add_argument('-f',
+                        '-figure',
+                        dest='path_figure',
+                        default=None,
+                        help='Path to the figure plot')
+    
     parser.add_argument('--latlon',
                         dest='flag_latlon_order',
                         default=False,
@@ -80,4 +86,5 @@ if __name__=='__main__':
                                                    latlon_cr,
                                                    args.ovs_factor,
                                                    args.width_window,
+                                                   path_fig=args.path_figure,
                                                    verbose=True)
