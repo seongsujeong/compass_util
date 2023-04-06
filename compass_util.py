@@ -56,7 +56,6 @@ def extract_slc_amp(path_slc_in: str, path_amp_out: str, pol: str='VV'):
     raster_out.FlushCache()
 
 
-
 def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, pol='VV', ncpu=4):
     '''
     Search the list of SLC files. Convert them into amplitude images
@@ -88,24 +87,6 @@ def slc_to_amplitude_batch(topdir_slc_in: str, dir_amp_out: str, pol='VV', ncpu=
                   zip(list_slc_in,
                       list_amp_out,
                       list_pol))
-
-
-def form_interferogram(path_slc_ref:str, path_slc_sec:str, path_ifg_out:str):
-    '''
-    Form interferogram using ISCE3
-    placeholder
-    '''
-    pass
-    # TODO Consider using the functionality in DOLPHIN
-
-
-def mosaic_raster(list_raster_in: str, path_raster_mosaic: str):
-    '''
-    Mosaic the input rasters
-    placeholder
-    '''
-    pass
-    # TODO Consider using the functionality in DOLPHIN
 
 
 def load_cr_coord_csv(path_cr_csv):
@@ -199,7 +180,11 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
     # Extract the image chip from source SLC
     slc_sub = arr_slc[upperleft_y:lowerright_y, upperleft_x:lowerright_x]
     
-    slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
+    #slc_ov =  isce3.signal.point_target_info.oversample(slc_sub, ovs_factor)
+    slc_ov =  isce3.cal.point_target_info.oversample(slc_sub, ovs_factor)
+
+
+    # temo code
     amp_ov = np.abs(slc_ov)
 
     # find the peak
@@ -240,20 +225,21 @@ def extract_gslc_coord_cr(path_gslc, latlon_cr,
 
     if path_fig:
         # Plot the oversampled result, and the detected peak
+        plt.subplot(1,2,1)
         plt.imshow(amp_ov)
         plt.plot(img_peak_ovs[1], img_peak_ovs[0], 'r+')
         plt.xlim([0, amp_ov.shape[1]])
         plt.ylim([amp_ov.shape[0], 0])
-        plt.savefig(path_fig)
-        plt.close()
-
+        #plt.savefig(path_fig)
+        #plt.close()
+        plt.subplot(1,2,2)
         # plot the peak on the original image chip i.e. before oversampling
         plt.imshow(np.abs(slc_sub))
         plt.plot(imgxy_peak[0]-upperleft_x, imgxy_peak[1]-upperleft_y, 'r+')
         plt.xlim([0, slc_sub.shape[1]])
         plt.ylim([slc_sub.shape[0], 0])
-        #plt.plot(17.8515625, 16.3046875, 'rx') # temo code
-        plt.savefig(path_fig.replace('.png','_original_scale.png'))
+        #plt.savefig(path_fig.replace('.png','.original.png'))
+        plt.savefig(path_fig)
         plt.close()
 
 
