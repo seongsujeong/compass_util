@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+'''
+Batch processor for COMPASS
+'''
+
 import multiprocessing
 import glob
 import s1reader
@@ -8,7 +12,10 @@ import os
 import yaml
 import argparse
 import time
+import pandas as pd
+import shutil
 
+from compass.utils import iono
 dict_pol_to_load = {
     '1SDV':'VV',
     '1SSV':'VV',
@@ -19,6 +26,130 @@ dict_pol_to_load = {
     '1SVH':'VH',
     '1SHV':'HV',
 }
+
+
+
+def prepare_batch_process(src_csv_path, project_dir,
+                          dst_csv_path=None,
+                          safe_dir=None,
+                          orbit_dir=None,
+                          tec_dir=None,
+                          apply_iono=True):
+    '''
+    - Download SAFE files
+    - Download TEC files
+    - Download orbit files
+    - Write out the preperation result in to CSV
+    '''
+
+    if dst_csv_path:
+        csv_out = dst_csv_path
+    else:
+        basename_csv = os.path.basename(src_csv_path)
+        csv_out = os.path.join(project_dir, f'prep_result_{basename_csv}')
+    
+    #if src_csv_path != csv_out:
+    #    shutil.copy(src_csv_path, csv_out)
+
+    df_csv = pd.read_csv(src_csv_path)
+    
+    num_safe = len(df_csv)
+    print(f'{num_safe} SAFE file(s) are found from the input CSV file.')
+
+    # Download SAFE file
+    if safe_dir:
+        safe_out_dir = safe_dir
+    else:
+        safe_out_dir = os.path.join(project_dir,'SAFE')
+    download_safe(df_csv, safe_out_dir)
+
+    # Download orbit file
+    if orbit_dir:
+        orbit_out_dir = orbit_dir
+    else:
+        orbit_out_dir = os.path.join(project_dir,'ORBIT')
+    download_orbit(df_csv, orbit_out_dir)
+
+    # Download tec file
+    if apply_iono:
+        if tec_dir:
+            tec_out_dir = tec_dir
+        else:
+            tec_out_dir = os.path.join(project_dir,'TEC')
+        download_ionex_in_csv(df_csv, tec_out_dir)
+
+
+    # Write out the preparation result
+    df_csv.to_csv(csv_out)
+
+
+def download_orbit(df_csv, orbit_dir):
+    '''
+    Download the Sentinel-1 SAFE files whose URL is in the .CSV file
+    '''
+    if not 'DOWNLOADED SAFE' in df_csv.columns:
+        raise RuntimeError('"DOWNLOADED SAFE" column was not found. Pleas download the SAFE .zip file first.')
+
+    os.makedirs(orbit_dir, exist_ok=True)
+
+    orbit_file_list = []
+    num_safe = len(df_csv)
+    for i_safe, safe_path in enumerate(df_csv['DOWNLOADED SAFE']):
+        print(f'Downloading orbit file: {i_safe + 1} / {num_safe}')
+        orbit_path = s1reader.get_orbit_file_from_dir(safe_path, orbit_dir, auto_download=True)
+        orbit_file_list.append(orbit_path)
+
+    df_csv['Orbit path'] = orbit_file_list
+
+
+def download_safe(df_csv, path_safe=None):
+    '''
+    Download the Sentinel-1 SAFE files whose URL is in the .CSV file
+    '''
+
+    if path_safe:
+        path_output = path_safe
+    else:
+        path_output = os.getcwd()
+
+    os.makedirs(path_output, exist_ok=True)
+
+    download_result_list = []
+    num_safe = len(df_csv)
+    for i_safe, url_safe in enumerate(df_csv['URL']):
+        safe_zip_filename = os.path.basename(url_safe)
+        path_safe_to = os.path.join(path_output, safe_zip_filename)
+        print(f'Downloading: {i_safe + 1} / {num_safe} - {safe_zip_filename}')
+
+        command_wget = f'wget --continue -O {path_safe_to} {url_safe}'
+        run_result = subprocess.run(command_wget, shell=True)
+
+        download_result_list.append(path_safe_to)
+
+    df_csv['DOWNLOADED SAFE'] = download_result_list
+
+
+def download_ionex_in_csv(df_csv, path_tec=None):
+    '''
+    Download IONEX file that corresponds to SAFE file in the input CSV file
+    '''
+    if path_tec:
+        path_output = path_tec
+    else:
+        path_output = os.getcwd()
+
+    os.makedirs(path_output, exist_ok=True)
+
+    num_safe = len(df_csv)
+
+    tec_file_list = []
+    for i_time, start_time in enumerate(df_csv['Start Time']):
+        print(f'Downloading: {i_time + 1} / {num_safe}')
+        start_date = start_time.split('T')[0].replace('-','')
+        tec_file_path = iono.download_ionex(start_date, path_tec)
+        tec_file_list.append(tec_file_path)
+
+    df_csv['TEC file'] = tec_file_list
 
 
 def get_all_burst_id(path_safe):
@@ -61,7 +192,7 @@ def find_common_bursts(list_safe_zip):
     return list(set_common_burst)
 
 
-def spawn_runconfig(arg_in):
+def spawn_runconfig(ref_runconfig_path, safe_dir, orbit_dir):
     '''
     Split the input runconfig into single burst runconfigs.
     Writes out the runconfigs.
@@ -76,11 +207,11 @@ def spawn_runconfig(arg_in):
         List of the burst logfiles,
         which corresponds to `list_runconfig_burst`
     '''
-    with open(arg_in.run_config_path, 'r+', encoding='utf8') as fin:
+    with open(ref_runconfig_path, 'r+', encoding='utf8') as fin:
         runconfig_dict_ref = yaml.safe_load(fin.read())
     scratch_path = runconfig_dict_ref['runconfig']['groups']['product_path_group']['scratch_path']
 
-    list_safe = glob.glob(f'{args.dir_safe}/S1*.zip')
+    list_safe = glob.glob(f'{safe_dir}/S1*.zip')
 
     list_burst_id = runconfig_dict_ref['runconfig']['groups']['input_file_group']['burst_id']
     if list_burst_id is None:
@@ -88,14 +219,14 @@ def spawn_runconfig(arg_in):
               ' Finding the common bursts in the SAFE data list.')
         list_burst_id = find_common_bursts(list_safe)
 
-    os.makedirs(arg_in.dir_orbit, exist_ok=True)
+    os.makedirs(orbit_dir, exist_ok=True)
     os.makedirs(scratch_path, exist_ok=True)
 
     runconfig_burst_list = []
 
     for path_safe in list_safe:
         str_date = os.path.basename(path_safe).split('_')[5].split('T')[0]
-        # TODO improve the readabilit of the line above
+        # TODO improve the readability of the line above
         list_burst_in_safe = get_all_burst_id(path_safe)
         for burst_id in list_burst_id:
             if not burst_id in list_burst_in_safe:
@@ -108,7 +239,7 @@ def spawn_runconfig(arg_in):
 
             runconfig_dict_out['runconfig']['groups']['input_file_group']['safe_file_path'] = [path_safe]
             path_orbit = s1reader.get_orbit_file_from_dir(path_safe,
-                                                          arg_in.dir_orbit,
+                                                          orbit_dir,
                                                           auto_download=True)
 
             runconfig_dict_out['runconfig']['groups']['input_file_group']['orbit_file_path'] = [path_orbit]
