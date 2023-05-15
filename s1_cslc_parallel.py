@@ -301,7 +301,7 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
     ----------
     ref_runconfig_path: str
         Path to the reference runconfig YAML file
-    df_csv: str
+    df_csv: pandas.core.frame.DataFrame
         Path to the stack processing preparation result .CSV file
     project_dir: str
         Parent directory for the stack processing
@@ -359,7 +359,7 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
         else:
             all_burst_in_zip = get_all_burst_id(safe_path)
             if candidate_burst_ids:
-                burst_id_list = list(all_burst_in_zip & candidate_burst_ids)
+                burst_id_list = list(all_burst_in_zip & set(candidate_burst_ids))
                 if len(burst_id_list) == 0:
                     continue
         
