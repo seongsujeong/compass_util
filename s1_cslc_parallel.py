@@ -297,9 +297,20 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
     Writes out the runconfigs.
     Return the list of the burst runconfigs.
 
-    Parameters:
+    Parameters
+    ----------
+    ref_runconfig_path: str
+        Path to the reference runconfig YAML file
+    df_csv: str
+        Path to the stack processing preparation result .CSV file
+    project_dir: str
+        Parent directory for the stack processing
+    burst_id_csv_path: str
+        Path to the common burst .csv file.
+        If None, the common bursts will be computed on-the-fly
 
-    Returns:
+    Returns
+    -------
     list_runconfig_burst: list(str)
         List of the burst runconfigs
     list_logfile_burst: list(str)
@@ -310,7 +321,8 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
     if burst_id_csv_path:
         candidate_burst_ids = set(get_burst_id_list(burst_id_csv_path))
     else:
-        candidate_burst_ids = None
+        downloaded_safe_list = list(df_csv['DOWNLOADED SAFE'])
+        candidate_burst_ids = find_common_bursts(downloaded_safe_list)
 
     with open(ref_runconfig_path, 'r+', encoding='utf8') as fin:
         runconfig_dict_ref = yaml.safe_load(fin.read())
@@ -319,7 +331,6 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
     burst_id_list_ref = runconfig_dict_ref['runconfig']['groups']['input_file_group']['burst_id']
 
     os.makedirs(scratch_dir_base, exist_ok=True)
-
 
     flag_tec_file_availale = 'TEC file' in df_csv.columns
 
@@ -361,7 +372,10 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
             runconfig_dict_out['runconfig']['groups']['input_file_group']['orbit_file_path'] = [orbit_path]
             runconfig_dict_out['runconfig']['groups']['product_path_group']['scratch_path'] = scratch_dir
             runconfig_dict_out['runconfig']['groups']['input_file_group']['burst_id'] = [burst_id]
-            runconfig_dict_out['runconfig']['groups']['dynamic_ancillary_file_group']['tec_file'] = tec_path
+
+            # Assign TEC file when the reference runconfig has that field
+            if 'tec_file' in runconfig_dict_out['runconfig']['groups']['dynamic_ancillary_file_group']:
+                runconfig_dict_out['runconfig']['groups']['dynamic_ancillary_file_group']['tec_file'] = tec_path
 
             runconfig_burst_list.append(runconfig_path)
 
