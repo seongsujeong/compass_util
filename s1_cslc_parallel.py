@@ -188,7 +188,7 @@ def get_all_burst_id(path_safe, as_set=True):
 
     if as_set:
         burst_id_set = set(list_burst_id)
-        burst_id_set
+        return burst_id_set
     else:
         return list_burst_id
 
