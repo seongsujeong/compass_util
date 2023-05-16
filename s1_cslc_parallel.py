@@ -166,7 +166,7 @@ def download_ionex_in_csv(df_csv, path_tec=None):
     df_csv['TEC file'] = tec_file_list
 
 
-def get_all_burst_id(path_safe):
+def get_all_burst_id(path_safe, as_set=True):
     '''
     Docstring here
     '''
@@ -179,17 +179,20 @@ def get_all_burst_id(path_safe):
 
     list_burst_id = []
 
+    print(f'Extracting burst ID: {os.path.basename(path_safe)}')
+
     for i_subswath in range(3):
         bursts_subswath = s1reader.load_bursts(path_safe, None, i_subswath+1, pol)
         list_burst_id_subswath = [str(burst.burst_id) for burst in bursts_subswath]
         list_burst_id += list_burst_id_subswath
 
-    burst_id_set = set(list_burst_id)
+    if as_set:
+        burst_id_set = set(list_burst_id)
+        burst_id_set
+    else:
+        return list_burst_id
 
-    return burst_id_set
-
-
-def find_common_bursts(list_safe_zip):
+def find_common_bursts(list_safe_zip, num_worker=1):
     '''
     Find the common burst IDs in the input list of SAFE file
   
@@ -204,6 +207,10 @@ def find_common_bursts(list_safe_zip):
         Common bursts in the SAFE file
     '''
 
+    with multiprocessing.Pool(num_worker) as p:
+        set_burst_id = p.map(get_all_burst_id,
+                              list_safe_zip)
+
     num_safe_zip = len(list_safe_zip)
 
     # Extract the burst IDs in each acquisition dates
@@ -216,7 +223,8 @@ def find_common_bursts(list_safe_zip):
         if not sensing_start_date in burst_id_by_daq_dict.keys():
             burst_id_by_daq_dict[sensing_start_date] = set([])
 
-        set_common_burst = get_all_burst_id(list_safe_zip[0])
+        #set_common_burst = get_all_burst_id(list_safe_zip[0])
+        set_common_burst = set_burst_id[i_safe]
         burst_id_by_daq_dict[sensing_start_date] =\
             burst_id_by_daq_dict[sensing_start_date].union(set_common_burst)
 
@@ -385,8 +393,6 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
     return runconfig_burst_list
 
 
-
-
 def get_parser():
     '''Initialize YamlArgparse class and parse CLI arguments for OPERA RTC.
     Modified after copied from `rtc_s1.py`
@@ -458,6 +464,10 @@ def process_runconfig(path_runconfig_burst):
     if rtnval.returncode == 0:
         os.remove(path_runconfig_burst)
 
+def run_parallel(list_burst_config, num_workers=1):
+    with multiprocessing.Pool(arg_in.num_workers) as p:
+        p.map(process_runconfig, list_burst_runconfig)
+
 
 def run(arg_in):
     '''
@@ -477,13 +487,11 @@ def run(arg_in):
     t0 = time.time()
     #list_burst_runconfig = spawn_runconfig(arg_in)
     list_burst_runconfig = spawn_runconfig(arg_in.run_config_path, df_csv, arg_in.project_dir, arg_in.candidate_burst_path)
-
-    with multiprocessing.Pool(arg_in.num_workers) as p:
-        p.map(process_runconfig, list_burst_runconfig)
-
     t1 = time.time()
-
     print(f'elapsed time: {t1-t0:06f} seconds.')
+    run_parallel(list_burst_runconfig, args.num_workers)
+    t2 = time.time()
+    
 
 
 if __name__=='__main__':
