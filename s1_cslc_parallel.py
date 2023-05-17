@@ -374,7 +374,11 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
 
         all_bursts_in_frame = get_all_burst_id(safe_path)
 
-        bursts_to_process = candidate_burst_ids.union(all_bursts_in_frame)
+        bursts_to_process = candidate_burst_ids & all_bursts_in_frame
+        if len(bursts_to_process) == 0:
+            print('Cannot find burst to process. Skipping.')
+            continue
+
         runconfig_path = os.path.join(scratch_dir_base, f'runconfig_{safe_basename}.yaml')
         scratch_dir = os.path.join(scratch_dir_base, f'temp_{safe_basename}')
         runconfig_dict_out = runconfig_dict_ref.copy()
