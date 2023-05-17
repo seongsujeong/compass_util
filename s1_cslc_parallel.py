@@ -14,6 +14,7 @@ import argparse
 import time
 import pandas as pd
 import datetime
+from itertools import repeat
 
 from compass.utils import iono
 dict_pol_to_load = {
@@ -444,11 +445,17 @@ def get_parser():
                         type=int,
                         default=ncpu_default,
                         help='Number of concurrent workers.')
+    
+    parser.add_argument('-t',
+                        dest='threads_per_worker',
+                        type=int,
+                        default=16,
+                        help='Number of threads per worker.')
 
     return parser
 
 
-def process_runconfig(path_runconfig_burst):
+def process_runconfig(path_runconfig_burst, num_threads=None):
     '''
     single worker to process runconfig from terminal using `subprocess`
 
@@ -462,6 +469,8 @@ def process_runconfig(path_runconfig_burst):
         See `get_rtc_s1_parser()`
 
     '''
+    if num_threads:
+        os.environ['OMP_NUM_THREADS'] = str(num_threads)
 
     list_arg_subprocess = ['s1_cslc.py', path_runconfig_burst]
 
@@ -471,9 +480,10 @@ def process_runconfig(path_runconfig_burst):
     if rtnval.returncode == 0:
         os.remove(path_runconfig_burst)
 
-def run_parallel(list_burst_runconfig, num_workers=1):
+def run_parallel(list_burst_runconfig, num_workers=1, threads_per_worker=None):
     with multiprocessing.Pool(num_workers) as p:
-        p.map(process_runconfig, list_burst_runconfig)
+        p.starmap(process_runconfig,
+                  zip(list_burst_runconfig, repeat(threads_per_worker)))
 
 
 def run(arg_in):
