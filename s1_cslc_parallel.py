@@ -212,7 +212,7 @@ def find_common_bursts(list_safe_zip, num_worker=1):
                               list_safe_zip)
 
     num_safe_zip = len(list_safe_zip)
-
+    print(set_burst_id)
     # Extract the burst IDs in each acquisition dates
     burst_id_by_daq_dict = {}
     for i_safe, safe_name in enumerate(list_safe_zip):
@@ -315,6 +315,7 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
         Parent directory for the stack processing
     burst_id_csv_path: str
         Path to the common burst .csv file.
+        This is basically copy-and-paste of the bursts selected from qGIS
         If None, the common bursts will be computed on-the-fly
 
     Returns
@@ -325,26 +326,35 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
         List of the burst logfiles,
         which corresponds to `list_runconfig_burst`
     '''
-
-    if burst_id_csv_path:
-        candidate_burst_ids = set(get_burst_id_list(burst_id_csv_path))
-    else:
-        downloaded_safe_list = list(df_csv['DOWNLOADED SAFE'])
-        candidate_burst_ids = find_common_bursts(downloaded_safe_list)
-
     with open(ref_runconfig_path, 'r+', encoding='utf8') as fin:
         runconfig_dict_ref = yaml.safe_load(fin.read())
 
     scratch_dir_base = runconfig_dict_ref['runconfig']['groups']['product_path_group']['scratch_path']
     burst_id_list_ref = runconfig_dict_ref['runconfig']['groups']['input_file_group']['burst_id']
-
+    
+    # Determine what burst to process
+    # Criteria: If burst list exits in the reference, then the burst list in
+    #           each runconfig will be the common bursts of the SAFE file's
+    #           bursts and the list in the reference runconfig
+    if burst_id_csv_path:
+        candidate_burst_ids = set(get_burst_id_list(burst_id_csv_path))
+    elif burst_id_list_ref:
+        candidate_burst_ids = set(candidate_burst_ids)
+    else:
+        # No information about the burst list was provided; find common bursts
+        downloaded_safe_list = list(df_csv['DOWNLOADED SAFE'])
+        candidate_burst_ids = find_common_bursts(downloaded_safe_list)
+    
     os.makedirs(scratch_dir_base, exist_ok=True)
 
     flag_tec_file_availale = 'TEC file' in df_csv.columns
 
     runconfig_burst_list = []
 
-    for row in df_csv.iterrows():
+    for i_row, row in enumerate(df_csv.iterrows()):
+        safe_basename = os.path.base(safe_path)
+        print(f'Processing: {i_row + 1} / {len(df_csv)} - {safe_basename}')
+
         safe_path = row[1]['DOWNLOADED SAFE']
         #if safe_path.startswith(project_dir):
         #    safe_path = safe_path.lstrip(project_dir)
@@ -358,37 +368,29 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
         else:
             tec_path = ''
 
-        start_time = datetime.datetime.fromisoformat(row[1]['Start Time'])
-        str_start_time = start_time.strftime('%Y%m%d_%H%M%S')
-        
-        # Determine the burst ID to process
-        if burst_id_list_ref:
-            burst_id_list = burst_id_list_ref
-        else:
-            all_burst_in_zip = get_all_burst_id(safe_path)
-            if candidate_burst_ids:
-                burst_id_list = list(all_burst_in_zip & set(candidate_burst_ids))
-                if len(burst_id_list) == 0:
-                    continue
-        
-        for burst_id in burst_id_list:
-            runconfig_path = os.path.join(scratch_dir_base, f'runconfig_{str_start_time}_{burst_id}.yaml')
-            scratch_dir = os.path.join(scratch_dir_base, f'temp_{str_start_time}_{burst_id}')
-            runconfig_dict_out = runconfig_dict_ref.copy()
+        #start_time = datetime.datetime.fromisoformat(row[1]['Start Time'])
+        #str_start_time = start_time.strftime('%Y%m%d_%H%M%S')
 
-            runconfig_dict_out['runconfig']['groups']['input_file_group']['safe_file_path'] = [safe_path]
-            runconfig_dict_out['runconfig']['groups']['input_file_group']['orbit_file_path'] = [orbit_path]
-            runconfig_dict_out['runconfig']['groups']['product_path_group']['scratch_path'] = scratch_dir
-            runconfig_dict_out['runconfig']['groups']['input_file_group']['burst_id'] = [burst_id]
+        all_bursts_in_frame = get_all_burst_id(safe_path)
 
-            # Assign TEC file when the reference runconfig has that field
-            if 'tec_file' in runconfig_dict_out['runconfig']['groups']['dynamic_ancillary_file_group']:
-                runconfig_dict_out['runconfig']['groups']['dynamic_ancillary_file_group']['tec_file'] = tec_path
+        bursts_to_process = candidate_burst_ids.union(all_bursts_in_frame)
+        runconfig_path = os.path.join(scratch_dir_base, f'runconfig_{safe_basename}.yaml')
+        scratch_dir = os.path.join(scratch_dir_base, f'temp_{safe_basename}')
+        runconfig_dict_out = runconfig_dict_ref.copy()
 
-            runconfig_burst_list.append(runconfig_path)
+        runconfig_dict_out['runconfig']['groups']['input_file_group']['safe_file_path'] = [safe_path]
+        runconfig_dict_out['runconfig']['groups']['input_file_group']['orbit_file_path'] = [orbit_path]
+        runconfig_dict_out['runconfig']['groups']['product_path_group']['scratch_path'] = scratch_dir
+        runconfig_dict_out['runconfig']['groups']['input_file_group']['burst_id'] = list(bursts_to_process)
 
-            with open(runconfig_path, 'w+', encoding='utf8') as fout:
-                yaml.dump(runconfig_dict_out, fout)
+        # Assign TEC file when the reference runconfig has that field
+        if 'tec_file' in runconfig_dict_out['runconfig']['groups']['dynamic_ancillary_file_group']:
+            runconfig_dict_out['runconfig']['groups']['dynamic_ancillary_file_group']['tec_file'] = tec_path
+
+        runconfig_burst_list.append(runconfig_path)
+
+        with open(runconfig_path, 'w+', encoding='utf8') as fout:
+            yaml.dump(runconfig_dict_out, fout)
     
     return runconfig_burst_list
 
@@ -464,8 +466,8 @@ def process_runconfig(path_runconfig_burst):
     if rtnval.returncode == 0:
         os.remove(path_runconfig_burst)
 
-def run_parallel(list_burst_config, num_workers=1):
-    with multiprocessing.Pool(arg_in.num_workers) as p:
+def run_parallel(list_burst_runconfig, num_workers=1):
+    with multiprocessing.Pool(num_workers) as p:
         p.map(process_runconfig, list_burst_runconfig)
 
 
