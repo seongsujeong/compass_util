@@ -339,7 +339,7 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
     if burst_id_csv_path:
         candidate_burst_ids = set(get_burst_id_list(burst_id_csv_path))
     elif burst_id_list_ref:
-        candidate_burst_ids = set(candidate_burst_ids)
+        candidate_burst_ids = set(burst_id_list_ref)
     else:
         # No information about the burst list was provided; find common bursts
         downloaded_safe_list = list(df_csv['DOWNLOADED SAFE'])
@@ -352,12 +352,13 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
     runconfig_burst_list = []
 
     for i_row, row in enumerate(df_csv.iterrows()):
-        safe_basename = os.path.base(safe_path)
-        print(f'Processing: {i_row + 1} / {len(df_csv)} - {safe_basename}')
-
         safe_path = row[1]['DOWNLOADED SAFE']
         #if safe_path.startswith(project_dir):
         #    safe_path = safe_path.lstrip(project_dir)
+
+        safe_basename = os.path.basename(safe_path)
+        print(f'Processing: {i_row + 1} / {len(df_csv)} - {safe_basename}')
+
         orbit_path = row[1]['Orbit path']
         #if orbit_path.startswith(project_dir):
         #    safe_path = orbit_path.lstrip(project_dir)
