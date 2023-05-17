@@ -356,7 +356,7 @@ def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=N
         #if safe_path.startswith(project_dir):
         #    safe_path = safe_path.lstrip(project_dir)
 
-        safe_basename = os.path.basename(safe_path)
+        safe_basename = os.path.basename(safe_path).rstrip('.zip')
         print(f'Processing: {i_row + 1} / {len(df_csv)} - {safe_basename}')
 
         orbit_path = row[1]['Orbit path']
