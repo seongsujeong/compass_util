@@ -300,7 +300,7 @@ def spawn_runconfig_old(ref_runconfig_path, safe_dir, orbit_dir):
     return runconfig_burst_list
 
 
-def populate_runconfig(ref_runconfig_path, safe_path, orbit_path=None):
+def populate_runconfig(ref_runconfig_path, safe_path, orbit_path):
     '''
     DUMMY docstring here
     '''
@@ -318,6 +318,7 @@ def populate_runconfig(ref_runconfig_path, safe_path, orbit_path=None):
     runconfig_dict_out['runconfig']['groups']['input_file_group']['orbit_file_path'] = [orbit_path]
     runconfig_dict_out['runconfig']['groups']['product_path_group']['scratch_path'] = scratch_dir
 
+    os.makedirs(scratch_dir_base, exist_ok=True)
     with open(runconfig_path, 'w+', encoding='utf8') as fout:
         yaml.dump(runconfig_dict_out, fout)
 
