@@ -300,6 +300,31 @@ def spawn_runconfig_old(ref_runconfig_path, safe_dir, orbit_dir):
     return runconfig_burst_list
 
 
+def populate_runconfig(ref_runconfig_path, safe_path, orbit_path=None):
+    '''
+    DUMMY docstring here
+    '''
+    with open(ref_runconfig_path, 'r+', encoding='utf8') as fin:
+        runconfig_dict_ref = yaml.safe_load(fin.read())
+
+    scratch_dir_base = runconfig_dict_ref['runconfig']['groups']['product_path_group']['scratch_path']
+    safe_basename = os.path.basename(safe_path).rstrip('.zip')
+
+    runconfig_path = os.path.join(scratch_dir_base, f'runconfig_{safe_basename}.yaml')
+    scratch_dir = os.path.join(scratch_dir_base, f'temp_{safe_basename}')
+    runconfig_dict_out = runconfig_dict_ref.copy()
+
+    runconfig_dict_out['runconfig']['groups']['input_file_group']['safe_file_path'] = [safe_path]
+    runconfig_dict_out['runconfig']['groups']['input_file_group']['orbit_file_path'] = [orbit_path]
+    runconfig_dict_out['runconfig']['groups']['product_path_group']['scratch_path'] = scratch_dir
+
+    with open(runconfig_path, 'w+', encoding='utf8') as fout:
+        yaml.dump(runconfig_dict_out, fout)
+
+    return runconfig_path
+
+
+
 def spawn_runconfig(ref_runconfig_path, df_csv, project_dir, burst_id_csv_path=None):
     '''
     Split the input runconfig into single burst runconfigs.
