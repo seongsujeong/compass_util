@@ -13,7 +13,7 @@ docker run -it --rm --entrypoint /bin/bash --network host \
 mkdir -p mprofile_output
 find . -maxdepth 1 -name "mprofile_*.dat" -exec cp {} ./mprofile_output/ \;
 
-export OUTDIR=`cat runconfig_cslc_calval.yaml |grep product_path:|awk -F ': ' '{print $2}'`
-export SCRATCHDIR=`cat runconfig_cslc_calval.yaml |grep scratch_path:|awk -F ': ' '{print $2}'`
+export OUTDIR=`cat $3 |grep product_path:|awk -F ': ' '{print $2}'`
+export SCRATCHDIR=`cat $3 |grep scratch_path:|awk -F ': ' '{print $2}'`
 
 docker run -it --rm --entrypoint /bin/bash -v $1:/home/compass_user/scratch $2 -c "rm -r $OUTDIR && rm -r $SCRATCHDIR && rm -r ./mprofile*.dat"
